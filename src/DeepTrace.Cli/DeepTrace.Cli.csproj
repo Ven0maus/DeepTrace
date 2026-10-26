@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeepTrace.Core\DeepTrace.Core.csproj" />
+    <ProjectReference Include="..\DeepTrace.Decompiler\DeepTrace.Decompiler.csproj" />
+    <ProjectReference Include="..\DeepTrace.Indexing\DeepTrace.Indexing.csproj" />
+  </ItemGroup>
+
+</Project>
