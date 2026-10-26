@@ -9,6 +9,8 @@ public sealed class InvestigationReport
 
     public IReadOnlyList<EvidenceItem> DiscoveredExecutionPath { get; init; } = [];
 
+    public IReadOnlyList<ObservedExecutionItem> ObservedExecutionPath { get; init; } = [];
+
     public IReadOnlyList<DependencyItem> RequiredDependenciesAndInvariants { get; init; } = [];
 
     public IReadOnlyList<ExtensionPointItem> CandidateExtensionPoints { get; init; } = [];
@@ -87,4 +89,34 @@ public sealed class ConfidenceItem
     public ConfidenceLevel Confidence { get; init; }
     public EvidenceSource Source { get; init; }
     public bool NeedsVerification { get; init; }
+}
+
+/// <summary>
+/// An execution path item confirmed by runtime observation.
+/// </summary>
+public sealed class ObservedExecutionItem
+{
+    /// <summary>Indexed symbol ID.</summary>
+    public string SymbolId { get; init; } = string.Empty;
+
+    /// <summary>Fully qualified method name.</summary>
+    public string FullyQualifiedName { get; init; } = string.Empty;
+
+    /// <summary>Assembly name.</summary>
+    public string Assembly { get; init; } = string.Empty;
+
+    /// <summary>Number of times this method was observed during the session.</summary>
+    public int CallCount { get; init; }
+
+    /// <summary>Total duration across all calls in milliseconds.</summary>
+    public double TotalDurationMs { get; init; }
+
+    /// <summary>Average duration per call in milliseconds.</summary>
+    public double AvgDurationMs { get; init; }
+
+    /// <summary>Minimum call depth observed.</summary>
+    public int MinDepth { get; init; }
+
+    /// <summary>Maximum call depth observed.</summary>
+    public int MaxDepth { get; init; }
 }

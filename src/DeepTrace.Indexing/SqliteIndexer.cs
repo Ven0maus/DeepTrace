@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Mono.Cecil;
 using DeepTrace.Core.Interfaces;
 using DeepTrace.Core.Models;
+using DeepTrace.Core.Runtime;
 
 namespace DeepTrace.Indexing;
 
@@ -973,6 +974,86 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         var start = Math.Max(0, lines.Length / 2 - 3);
         var end = Math.Min(lines.Length, start + 7);
         return string.Join("\n", lines[start..end]).Trim();
+    }
+
+    public void StoreRuntimeObservation(RuntimeObservation observation)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            conn.Open();
+            conn.Cmd(@"INSERT INTO runtime_observations (id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms)
+                    VALUES (@id, @symbolId, @fqName, @assembly, @timestamp, @depth, @params, @returnValue, @durationMs)")
+                .P("@id", observation.Id)
+                .P("@symbolId", observation.SymbolId)
+                .P("@fqName", observation.FullyQualifiedName)
+                .P("@assembly", observation.Assembly)
+                .P("@timestamp", observation.Timestamp)
+                .P("@depth", observation.Depth)
+                .P("@params", (object?)observation.Parameters)
+                .P("@returnValue", (object?)observation.ReturnValue)
+                .P("@durationMs", observation.DurationMs)
+                .ExecuteNonQuery();
+        }
+    }
+
+    public IReadOnlyList<RuntimeObservation> GetRuntimeObservations(string symbolId)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            conn.Open();
+            var observations = new List<RuntimeObservation>();
+            var cmd = conn.Cmd(@"SELECT id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms
+                    FROM runtime_observations WHERE symbol_id = @symbolId ORDER BY timestamp")
+                .P("@symbolId", symbolId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                observations.Add(new RuntimeObservation
+                {
+                    Id = reader.GetString(0),
+                    SymbolId = reader.GetString(1),
+                    FullyQualifiedName = reader.GetString(2),
+                    Assembly = reader.GetString(3),
+                    Timestamp = reader.GetInt64(4),
+                    Depth = reader.GetInt32(5),
+                    Parameters = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    ReturnValue = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    DurationMs = reader.GetDouble(8),
+                });
+            }
+            return observations.AsReadOnly();
+        }
+    }
+
+    public IReadOnlyList<RuntimeObservation> GetAllRuntimeObservations()
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            conn.Open();
+            var observations = new List<RuntimeObservation>();
+            var cmd = conn.Cmd(@"SELECT id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms
+                    FROM runtime_observations ORDER BY timestamp");
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                observations.Add(new RuntimeObservation
+                {
+                    Id = reader.GetString(0),
+                    SymbolId = reader.GetString(1),
+                    FullyQualifiedName = reader.GetString(2),
+                    Assembly = reader.GetString(3),
+                    Timestamp = reader.GetInt64(4),
+                    Depth = reader.GetInt32(5),
+                    Parameters = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    ReturnValue = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    DurationMs = reader.GetDouble(8),
+                });
+            }
+            return observations.AsReadOnly();
+        }
     }
 
     public void Dispose() { }

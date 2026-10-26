@@ -434,5 +434,29 @@ public sealed class InvestigationTools : IInvestigationTools
         return string.Join("\n", lines);
     }
 
+    public string GetRuntimeObservations(string symbolId)
+    {
+        var observations = _indexer.GetRuntimeObservations(symbolId);
+
+        if (!observations.Any())
+        {
+            return BuildHeader("GetRuntimeObservations") + $"No runtime observations found for '{symbolId}'.";
+        }
+
+        var lines = new List<string> { BuildHeader("GetRuntimeObservations"), $"Observations: {observations.Count} found" };
+
+        foreach (var obs in observations)
+        {
+            lines.Add($"  [{obs.Timestamp}] depth={obs.Depth} duration={obs.DurationMs:F1}ms");
+            if (!string.IsNullOrEmpty(obs.Parameters))
+                lines.Add($"    Params: {obs.Parameters}");
+            if (!string.IsNullOrEmpty(obs.ReturnValue))
+                lines.Add($"    Return: {obs.ReturnValue}");
+            lines.Add(string.Empty);
+        }
+
+        return string.Join("\n", lines);
+    }
+
     private static string BuildHeader(string methodName) => $"=== {methodName} ===\n";
 }

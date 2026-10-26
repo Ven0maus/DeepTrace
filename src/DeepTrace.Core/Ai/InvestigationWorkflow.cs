@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DeepTrace.Core.Models;
+using DeepTrace.Core.Runtime;
 
 namespace DeepTrace.Core.Ai;
 
@@ -34,6 +35,7 @@ public interface IInvestigationTools
     string GetCallees(string methodSymbolId, int depth = 1, int limit = 50);
     string SearchReferences(string symbolId, int limit = 30);
     string GetRelatedMethods(string methodSymbolId, int limit = 10);
+    string GetRuntimeObservations(string symbolId);
 }
 
 /// <summary>
@@ -52,11 +54,13 @@ public sealed class InvestigationWorkflow
     };
 
     private readonly IInvestigationTools _tools;
+    private readonly IRuntimeObserver? _runtimeObserver;
     private int _searchCount;
 
-    public InvestigationWorkflow(IInvestigationTools tools)
+    public InvestigationWorkflow(IInvestigationTools tools, IRuntimeObserver? runtimeObserver = null)
     {
         _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+        _runtimeObserver = runtimeObserver;
         _searchCount = 0;
     }
 
@@ -122,6 +126,33 @@ public sealed class InvestigationWorkflow
             {
                 exploredMethods[symbolId] = methodInfo;
                 verifiedSymbolIds.Add(symbolId);
+            }
+        }
+
+        // Phase 2.5: Check runtime observations for discovered methods
+        var observedItems = new List<ObservedExecutionItem>();
+        var observedSymbolIds = new HashSet<string>();
+        if (_runtimeObserver != null)
+        {
+            foreach (var symbolId in verifiedSymbolIds)
+            {
+                var observations = _runtimeObserver.GetObservations(symbolId);
+                if (observations.Count > 0)
+                {
+                    observedSymbolIds.Add(symbolId);
+                    var totalDuration = observations.Sum(o => o.DurationMs);
+                    observedItems.Add(new ObservedExecutionItem
+                    {
+                        SymbolId = symbolId,
+                        FullyQualifiedName = observations.First().FullyQualifiedName,
+                        Assembly = observations.First().Assembly,
+                        CallCount = observations.Count,
+                        TotalDurationMs = totalDuration,
+                        AvgDurationMs = totalDuration / observations.Count,
+                        MinDepth = observations.Min(o => o.Depth),
+                        MaxDepth = observations.Max(o => o.Depth),
+                    });
+                }
             }
         }
 
@@ -224,6 +255,30 @@ public sealed class InvestigationWorkflow
             NeedsVerification = true
         });
 
+        // Runtime evidence confidence
+        if (observedItems.Count > 0)
+        {
+            confidenceItems.Add(new ConfidenceItem
+            {
+                Finding = $"Execution confirmed by {observedItems.Count} runtime observation(s)",
+                Confidence = observedItems.Count >= 3 ? ConfidenceLevel.High : ConfidenceLevel.Medium,
+                Source = EvidenceSource.Runtime,
+                NeedsVerification = false
+            });
+
+            // Boost confidence for verified methods that have runtime evidence
+            foreach (var item in observedItems)
+            {
+                confidenceItems.Add(new ConfidenceItem
+                {
+                    Finding = $"{item.FullyQualifiedName} observed {item.CallCount} time(s)",
+                    Confidence = ConfidenceLevel.High,
+                    Source = EvidenceSource.Runtime,
+                    NeedsVerification = false
+                });
+            }
+        }
+
         // Phase 6: Build the report
         var finalEvidence = rawEvidenceItems.Select(e => new EvidenceItem
         {
@@ -240,10 +295,11 @@ public sealed class InvestigationWorkflow
         {
             RequestInterpretation = report.RequestInterpretation,
             DiscoveredExecutionPath = finalEvidence,
+            ObservedExecutionPath = observedItems.AsReadOnly(),
             RequiredDependenciesAndInvariants = dependencies,
             CandidateExtensionPoints = extensionPoints,
             EvidenceAndConfidence = confidenceItems,
-            ImplementationPlan = SynthesizeImplementationPlan(request, concepts, exploredMethods),
+            ImplementationPlan = SynthesizeImplementationPlan(request, concepts, exploredMethods, observedItems),
             ValidationPlan = SynthesizeValidationPlan(exploredMethods, dependencies)
         };
     }
@@ -626,7 +682,7 @@ public sealed class InvestigationWorkflow
     /// <summary>
     /// Synthesize an implementation plan from discovered methods.
     /// </summary>
-    private static string SynthesizeImplementationPlan(string request, IReadOnlyList<string> concepts, IDictionary<string, MethodInfo> exploredMethods)
+    private static string SynthesizeImplementationPlan(string request, IReadOnlyList<string> concepts, IDictionary<string, MethodInfo> exploredMethods, IReadOnlyList<ObservedExecutionItem> observedItems)
     {
         if (exploredMethods.Count == 0)
         {
@@ -645,6 +701,16 @@ public sealed class InvestigationWorkflow
         {
             var typeMethods = exploredMethods.Values.Where(m => m.DeclaringTypeFullName == type).ToList();
             lines.Add($"  - {type} ({typeMethods.Count} methods)");
+        }
+
+        if (observedItems.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"Runtime evidence: {observedItems.Count} method(s) observed during execution:");
+            foreach (var obs in observedItems.Take(10))
+            {
+                lines.Add($"  - {obs.FullyQualifiedName} (called {obs.CallCount}x, avg {obs.AvgDurationMs:F1}ms)");
+            }
         }
 
         lines.Add(string.Empty);

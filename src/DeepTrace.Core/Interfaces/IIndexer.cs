@@ -1,4 +1,5 @@
 using DeepTrace.Core.Models;
+using DeepTrace.Core.Runtime;
 
 namespace DeepTrace.Core.Interfaces;
 
@@ -19,4 +20,7 @@ public interface IIndexer
     bool IsAssemblyIndexed(string assemblyName);
     long GetAssemblyLastWriteTime(string assemblyPath);
     string GetAssemblyHash(string assemblyPath);
+    void StoreRuntimeObservation(RuntimeObservation observation);
+    IReadOnlyList<RuntimeObservation> GetRuntimeObservations(string symbolId);
+    IReadOnlyList<RuntimeObservation> GetAllRuntimeObservations();
 }

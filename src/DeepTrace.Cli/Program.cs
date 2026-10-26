@@ -1,4 +1,5 @@
 using DeepTrace.Core.Models;
+using DeepTrace.Core.Runtime;
 using DeepTrace.Decompiler;
 using DeepTrace.Indexing;
 
@@ -183,8 +184,15 @@ switch (command)
                 Console.Error.WriteLine("Usage: deeptrace investigate <question>");
                 return;
             }
+            var runtimeObserver = new DeepTrace.Core.Runtime.InMemoryRuntimeObserver();
+            // Pre-populate from SQLite storage
+            foreach (var obs in indexer.GetAllRuntimeObservations())
+            {
+                runtimeObserver.RecordCall(obs.SymbolId, obs.FullyQualifiedName, obs.Assembly,
+                    obs.Parameters, obs.ReturnValue, obs.DurationMs, obs.Depth);
+            }
             var tools = new DeepTrace.Core.Ai.InvestigationTools(indexer);
-            var workflow = new DeepTrace.Core.Ai.InvestigationWorkflow(tools);
+            var workflow = new DeepTrace.Core.Ai.InvestigationWorkflow(tools, runtimeObserver);
             var options = new DeepTrace.Core.Ai.InvestigationOptions
             {
                 MaxSearches = 6,
@@ -194,6 +202,58 @@ switch (command)
             };
             var report = workflow.Investigate(args[1], options);
             PrintReport(report);
+            break;
+        }
+
+    case "observe":
+        {
+            if (args.Length < 3)
+            {
+                Console.Error.WriteLine("Usage: deeptrace observe <symbolId> <durationMs> [parametersJson] [returnValueJson]");
+                return;
+            }
+            var symbolId = args[1];
+            var durationMs = args.Length > 2 ? double.Parse(args[2]) : 0;
+            var parameters = args.Length > 3 ? args[3] : null;
+            var returnValue = args.Length > 4 ? args[4] : null;
+            var observer = new DeepTrace.Core.Runtime.InMemoryRuntimeObserver();
+            var assembly = "Unknown";
+            var fqName = symbolId.Split("::").LastOrDefault() ?? symbolId;
+            observer.RecordCall(symbolId, fqName, assembly, parameters, returnValue, durationMs);
+            var observation = new RuntimeObservation
+            {
+                Id = observer.GetAllObservations().First().Id,
+                SymbolId = symbolId,
+                FullyQualifiedName = fqName,
+                Assembly = assembly,
+                Timestamp = observer.GetAllObservations().First().Timestamp,
+                Depth = 0,
+                Parameters = parameters,
+                ReturnValue = returnValue,
+                DurationMs = durationMs,
+            };
+            indexer.StoreRuntimeObservation(observation);
+            Console.WriteLine($"Observed: {symbolId} ({durationMs}ms)");
+            break;
+        }
+
+    case "runtime":
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: deeptrace runtime <symbolId>");
+                return;
+            }
+            var observations = indexer.GetRuntimeObservations(args[1]);
+            Console.WriteLine($"Runtime observations for '{args[1]}': {observations.Count} recorded");
+            foreach (var obs in observations)
+            {
+                Console.WriteLine($"  [{obs.Timestamp}] depth={obs.Depth} duration={obs.DurationMs:F1}ms");
+                if (!string.IsNullOrEmpty(obs.Parameters))
+                    Console.WriteLine($"    Params: {obs.Parameters}");
+                if (!string.IsNullOrEmpty(obs.ReturnValue))
+                    Console.WriteLine($"    Return: {obs.ReturnValue}");
+            }
             break;
         }
 
@@ -226,6 +286,8 @@ static void PrintUsage()
     Console.WriteLine("  callees <methodSymbolId>          Find callees of method");
     Console.WriteLine("  references <symbolId>             Find all references");
     Console.WriteLine("  investigate <question>            Run AI investigation workflow");
+    Console.WriteLine("  observe <symbolId> <durationMs>   Record a runtime observation");
+    Console.WriteLine("  runtime <symbolId>                Show runtime observations");
     Console.WriteLine("  stats                             Show indexer stats");
 }
 
@@ -315,6 +377,18 @@ static void PrintReport(DeepTrace.Core.Models.InvestigationReport report)
             Console.WriteLine($"    {e.FullyQualifiedName} ({e.Assembly})");
             if (!string.IsNullOrEmpty(e.Relevance))
                 Console.WriteLine($"    Reason: {e.Relevance}");
+        }
+    }
+    Console.WriteLine();
+
+    Console.WriteLine("--- Observed Execution Path ---");
+    if (report.ObservedExecutionPath.Count == 0)
+        Console.WriteLine("  (no runtime observations recorded)");
+    else
+    {
+        foreach (var o in report.ObservedExecutionPath)
+        {
+            Console.WriteLine($"  {o.FullyQualifiedName} (called {o.CallCount}x, avg {o.AvgDurationMs:F1}ms, depth {o.MinDepth}-{o.MaxDepth})");
         }
     }
     Console.WriteLine();

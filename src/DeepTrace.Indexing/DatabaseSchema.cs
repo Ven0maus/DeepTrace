@@ -160,5 +160,20 @@ internal static class DatabaseSchema
         BEGIN
             DELETE FROM fts_methods WHERE rowid = OLD.rowid;
         END;
+
+        CREATE TABLE IF NOT EXISTS runtime_observations (
+            id TEXT PRIMARY KEY,
+            symbol_id TEXT NOT NULL,
+            fully_qualified_name TEXT NOT NULL,
+            assembly TEXT NOT NULL,
+            timestamp BIGINT NOT NULL,
+            depth INTEGER NOT NULL DEFAULT 0,
+            parameters TEXT,
+            return_value TEXT,
+            duration_ms REAL NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_runtime_symbol ON runtime_observations(symbol_id);
+        CREATE INDEX IF NOT EXISTS idx_runtime_timestamp ON runtime_observations(timestamp);
     ";
 }
