@@ -1,3 +1,8 @@
 <Solution>
-  <Project Path="DeepTrace/DeepTrace.csproj" />
+  <Project Path="src/DeepTrace.Cli/DeepTrace.Cli.csproj" />
+  <Project Path="src/DeepTrace.Core/DeepTrace.Core.csproj" />
+  <Project Path="src/DeepTrace.Decompiler/DeepTrace.Decompiler.csproj" />
+  <Project Path="src/DeepTrace.Indexing/DeepTrace.Indexing.csproj" />
+  <Project Path="tests/DeepTrace.Tests/DeepTrace.Tests.csproj" />
+
 </Solution>
