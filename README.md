@@ -1,10 +1,10 @@
-# CodeAtlas
+# DeepTrace
 
 **AI-powered code intelligence for decompiled .NET games and mod development.**
 
-CodeAtlas helps AI coding assistants understand unfamiliar game codebases by indexing assemblies, analyzing code relationships, and tracing gameplay behavior back to its implementation.
+DeepTrace helps AI coding assistants understand unfamiliar game codebases by indexing assemblies, analyzing code relationships, and tracing gameplay behavior back to its implementation.
 
-Instead of searching for a method by name and guessing how it works, CodeAtlas enables an AI to investigate the existing code, follow relevant call chains, identify dependencies, and find suitable extension points before implementing a mod.
+Instead of searching for a method by name and guessing how it works, DeepTrace enables an AI to investigate the existing code, follow relevant call chains, identify dependencies, and find suitable extension points before implementing a mod.
 
 The initial focus is on .NET games and BepInEx mod development, with an architecture designed to support broader code analysis in the future.
 
@@ -25,7 +25,7 @@ Consider the request:
 
 A conventional text search might find a method with `NPC` or `Spawn` in its name, but that doesn't establish whether it is the correct entry point.
 
-CodeAtlas aims to help an AI investigate the feature systematically:
+DeepTrace aims to help an AI investigate the feature systematically:
 
 1. Search for city initialization and population-related code.
 2. Identify candidate NPC creation methods.
@@ -39,7 +39,7 @@ The objective is to reuse the game's existing behavior wherever possible, rather
 
 ## Architecture
 
-CodeAtlas is designed around several cooperating components.
+DeepTrace is designed around several cooperating components.
 
 | Component | Responsibility |
 |---|---|
@@ -71,7 +71,7 @@ Unity Mono and Unity IL2CPP require different integration approaches. Initial su
 
 ## AI Tool Interface
 
-CodeAtlas is intended to expose structured operations that an AI can call while investigating a codebase.
+DeepTrace is intended to expose structured operations that an AI can call while investigating a codebase.
 
 | Operation | Purpose |
 |---|---|
@@ -90,7 +90,7 @@ Results should include stable symbol identifiers, source provenance, and explici
 
 ## Search and Analysis
 
-CodeAtlas is designed to combine several complementary forms of analysis.
+DeepTrace is designed to combine several complementary forms of analysis.
 
 ### Full-text search
 
@@ -108,7 +108,7 @@ Optionally use generated method summaries and embeddings to discover relevant co
 
 Follow relationships from candidate entry points to discover dependencies and reconstruct likely execution paths.
 
-Static analysis cannot fully resolve every virtual call, reflection-based invocation, event subscription, dynamically loaded assembly, or engine callback. CodeAtlas should preserve these limitations in its results instead of presenting incomplete graphs as definitive execution traces.
+Static analysis cannot fully resolve every virtual call, reflection-based invocation, event subscription, dynamically loaded assembly, or engine callback. DeepTrace should preserve these limitations in its results instead of presenting incomplete graphs as definitive execution traces.
 
 ## Runtime Integration
 
