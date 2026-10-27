@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Mono.Cecil;
@@ -41,6 +43,10 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         {
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
+
+            // Apply SQLite performance PRAGMAs before any transaction
+            foreach (var pragma in PragmaSettings)
+                conn.Cmd(pragma).ExecuteNonQuery();
 
             var cmd = conn.Cmd("SELECT hash FROM assemblies WHERE name = @name")
                 .P("@name", assembly.Name);
@@ -681,6 +687,15 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         return Convert.ToHexString(hash);
     }
 
+    private static readonly string[] PragmaSettings = new[]
+    {
+        "PRAGMA journal_mode=WAL;",
+        "PRAGMA synchronous=NORMAL;",
+        "PRAGMA temp_store=MEMORY;",
+        "PRAGMA cache_size=100000;",
+        "PRAGMA mmap_size=268435456;",
+    };
+
     private void InitializeDatabase()
     {
         using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
@@ -763,6 +778,8 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         var insertEngineCb = conn.Cmd("INSERT OR IGNORE INTO engine_callbacks (type_id, callback_name) VALUES (@typeId, @callbackName)", tx);
         var insertImpl = conn.Cmd("INSERT OR IGNORE INTO interface_implementations (implementing_type_id, interface_name, method_name) VALUES (@typeId, @interfaceName, @methodName)", tx);
 
+        var allTypesArray = assemblyDef.MainModule.Types.ToArray();
+
         foreach (var type in assemblyDef.MainModule.Types)
         {
             foreach (var method in type.Methods)
@@ -778,9 +795,10 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 var signature = GetSignature(method);
 
                 string? summary = null;
+                string? body = null;
                 if (!method.IsAbstract && method.HasBody && method.Body.Instructions != null)
                 {
-                    var body = _decompiler.TryDecompileMethod(assemblyDef.MainModule.FileName, type.FullName, signature);
+                    body = _decompiler.TryDecompileMethod(assemblyDef.MainModule.FileName, type.FullName, signature);
                     var isOverride = method.IsVirtual && method.Name != ".ctor" && method.Name != ".cctor" && method.HasBody;
                     summary = MethodSummaryGenerator.Generate(new MethodInfo { FullName = fullName, Name = method.Name, Signature = signature, IsStatic = method.IsStatic, IsVirtual = method.IsVirtual, IsAbstract = method.IsAbstract, IsOverride = isOverride, Attributes = new List<string>() }, body);
                 }
@@ -793,13 +811,12 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     ("@summary", summary ?? string.Empty),
                 }).ExecuteNonQuery();
 
-                if (summary != null)
+                if (body != null)
                 {
-                    var body = _decompiler.TryDecompileMethod(assemblyDef.MainModule.FileName, type.FullName, signature);
                     insertMethodBody.P(new (string name, object value)[]
                     {
                         ("@id", methodId), ("@declaringType", type.FullName),
-                        ("@body", body ?? string.Empty), ("@summary", summary), ("@sourceFile", (object)null!),
+                        ("@body", body ?? string.Empty), ("@summary", summary ?? string.Empty), ("@sourceFile", (object)null!),
                         ("@startLine", (object)null!), ("@startCol", (object)null!),
                         ("@endLine", (object)null!), ("@endCol", (object)null!),
                         ("@isStatic", method.IsStatic ? 1 : 0),
@@ -809,7 +826,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     }).ExecuteNonQuery();
 
                     // Extract call graph from IL
-                    ExtractCallGraph(conn, assemblyDef, method, type.FullName, assemblyName, insertCallee, insertCaller, insertEdge);
+                    ExtractCallGraph(conn, allTypesArray, method, type.FullName, assemblyName, insertCallee, insertCaller, insertEdge);
                 }
 
                 for (var i = 0; i < method.Parameters.Count; i++)
@@ -862,7 +879,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         }
     }
 
-    private void ExtractCallGraph(SqliteConnection conn, AssemblyDefinition assemblyDef, MethodDefinition method, string declaringType, string assemblyName, SqliteCommand insertCallee, SqliteCommand insertCaller, SqliteCommand insertEdge)
+    private void ExtractCallGraph(SqliteConnection conn, TypeDefinition[] allTypes, MethodDefinition method, string declaringType, string assemblyName, SqliteCommand insertCallee, SqliteCommand insertCaller, SqliteCommand insertEdge)
     {
         if (method.Body == null || method.Body.Instructions == null)
             return;
@@ -894,7 +911,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 continue;
             }
 
-            var calleeId = ResolveMethodId(assemblyDef, methodRef, assemblyName);
+            var calleeId = ResolveMethodId(allTypes, methodRef, assemblyName);
             if (calleeId != null)
             {
                 insertCallee.P(new (string name, object value)[] { ("@methodId", callerId), ("@calledId", calleeId) }).ExecuteNonQuery();
@@ -1064,7 +1081,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         }
     }
 
-    private static string? ResolveMethodId(AssemblyDefinition assemblyDef, MethodReference methodRef, string assemblyName)
+    private static string? ResolveMethodId(TypeDefinition[] allTypes, MethodReference methodRef, string assemblyName)
     {
         var declaringType = methodRef.DeclaringType;
         if (declaringType == null)
@@ -1077,7 +1094,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         }
 
         // Search within the same assembly first
-        var typeDef = assemblyDef.MainModule.Types.FirstOrDefault(t => t.FullName == declaringType.FullName);
+        var typeDef = allTypes.FirstOrDefault(t => t.FullName == declaringType.FullName);
         if (typeDef == null)
         {
             // Try generic type definition
@@ -1087,7 +1104,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             {
                 genericName = genericName.Substring(0, genericIdx);
             }
-            typeDef = assemblyDef.MainModule.Types.FirstOrDefault(t => t.FullName == genericName);
+            typeDef = allTypes.FirstOrDefault(t => t.FullName == genericName);
         }
 
         if (typeDef == null)

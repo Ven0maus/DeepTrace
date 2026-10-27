@@ -12,15 +12,24 @@ namespace DeepTrace.Decompiler;
 public sealed class IlspyDecompiler : IDecompiler, IDisposable
 {
     private readonly ConcurrentDictionary<string, DecompilerSettings> _settingsCache = new();
+    private readonly ConcurrentDictionary<string, string> _typeSourceCache = new();
     private bool _disposed;
 
+    /// <summary>
+    /// Decompile a single method. Caches the full type source to avoid re-decompiling the type
+    /// when multiple methods from the same type are requested.
+    /// </summary>
     public string DecompileMethod(string assemblyPath, string typeFullName, string methodSignature)
     {
-        var settings = _settingsCache.GetOrAdd(assemblyPath, _ => CreateSettings());
-        var decompiler = new CSharpDecompiler(assemblyPath, settings);
-        var fullName = new FullTypeName(typeFullName);
+        var cacheKey = $"{assemblyPath}|||{typeFullName}";
+        var typeSource = _typeSourceCache.GetOrAdd(cacheKey, _ =>
+        {
+            var settings = _settingsCache.GetOrAdd(assemblyPath, _ => CreateSettings());
+            var decompiler = new CSharpDecompiler(assemblyPath, settings);
+            var fullName = new FullTypeName(typeFullName);
+            return decompiler.DecompileTypeAsString(fullName);
+        });
 
-        var typeSource = decompiler.DecompileTypeAsString(fullName);
         if (string.IsNullOrWhiteSpace(typeSource))
             return string.Empty;
 
@@ -182,5 +191,6 @@ public sealed class IlspyDecompiler : IDecompiler, IDisposable
         if (_disposed) return;
         _disposed = true;
         _settingsCache.Clear();
+        _typeSourceCache.Clear();
     }
 }
