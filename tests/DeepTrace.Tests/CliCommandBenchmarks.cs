@@ -585,6 +585,8 @@ public class SharedBenchDb : IDisposable
         // Use test assembly directory so the DB lives alongside the built test binary
         var testDir = Path.GetDirectoryName(typeof(CliCommandBenchmarks).Assembly.Location)!;
         WorkDir = Path.Combine(testDir, "benchdata");
+        if (Directory.Exists(WorkDir))
+            Directory.Delete(WorkDir, true);
         Directory.CreateDirectory(WorkDir);
 
         DbPath = Path.Combine(WorkDir, "bench.db");

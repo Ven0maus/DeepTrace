@@ -18,11 +18,12 @@
     <ProjectReference Include="..\..\src\DeepTrace.Decompiler\DeepTrace.Decompiler.csproj" />
     <ProjectReference Include="..\..\src\DeepTrace.Indexing\DeepTrace.Indexing.csproj" />
     <ProjectReference Include="TestLib\TestLib.csproj" />
-    <ProjectReference Include="..\..\test-assets\BenchmarkLib\BenchmarkLib.csproj" />
+    <ProjectReference Include="BenchmarkLib\BenchmarkLib.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="TestLib\**\*.cs" />
+    <Compile Remove="BenchmarkLib\**\*.cs" />
   </ItemGroup>
 
 </Project>

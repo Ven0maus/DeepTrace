@@ -742,6 +742,15 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
         conn.Open();
+
+        // Drop all triggers to avoid stale triggers from old schema versions
+        using var rdr = conn.Cmd(@"SELECT name FROM sqlite_master WHERE type='trigger'").ExecuteReader();
+        while (rdr.Read())
+        {
+            var triggerName = rdr.GetString(0);
+            conn.Cmd($"DROP TRIGGER IF EXISTS {triggerName}").ExecuteNonQuery();
+        }
+
         conn.Cmd(DatabaseSchema.CreateTables).ExecuteNonQuery();
     }
 

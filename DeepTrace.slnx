@@ -3,7 +3,6 @@
   <Project Path="src/DeepTrace.Core/DeepTrace.Core.csproj" />
   <Project Path="src/DeepTrace.Decompiler/DeepTrace.Decompiler.csproj" />
   <Project Path="src/DeepTrace.Indexing/DeepTrace.Indexing.csproj" />
-  <Project Path="test-assets/BenchmarkLib/BenchmarkLib.csproj" />
   <Project Path="tests/DeepTrace.Tests/TestLib/TestLib.csproj" />
   <Project Path="tests/DeepTrace.Tests/DeepTrace.Tests.csproj" />
 
