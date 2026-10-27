@@ -86,4 +86,31 @@ public class Bm25ScorerTests
         var score = Bm25Scorer.ScoreSummary("Greets a player", "");
         Assert.Equal(0.0, score);
     }
+
+    [Fact]
+    public void Score_StopwordsFilteredFromQuery()
+    {
+        // Query composed entirely of stopwords — all query terms filtered, no term score, no exact/prefix boost
+        var result = new SearchResult { Name = "Greet", FullyQualifiedName = "TestLib.Greeter.Greet" };
+        var score = Bm25Scorer.Score(result, "load data get set");
+        Assert.Equal(0.0, score);
+    }
+
+    [Fact]
+    public void Score_StopwordsFilteredFromDocument()
+    {
+        // Document name contains a stopword — should not boost
+        var result = new SearchResult { Name = "GetPlayer", FullyQualifiedName = "TestLib.GetPlayer" };
+        var score = Bm25Scorer.Score(result, "get");
+        // "get" is a stopword, so no term match score; no exact/prefix boost either
+        Assert.Equal(0.0, score);
+    }
+
+    [Fact]
+    public void Score_PreservesDomainTerms()
+    {
+        var result = new SearchResult { Name = "Vector3", FullyQualifiedName = "TestLib.Vector3" };
+        var score = Bm25Scorer.Score(result, "Vector3");
+        Assert.True(score > 10.0); // exact match boost
+    }
 }

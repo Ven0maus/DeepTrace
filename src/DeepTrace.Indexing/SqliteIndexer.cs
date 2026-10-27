@@ -348,7 +348,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             }
 
             results.Sort((a, b) => b.RelevanceScore.CompareTo(a.RelevanceScore));
-            return [.. results.Take(limit)];
+            return SearchWithSemantic(results, query, limit);
         }
     }
 
@@ -763,8 +763,9 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         {
             using var assemblyDef = AssemblyDefinition.ReadAssembly(assemblyPath, new ReaderParameters());
             IndexTypes(conn, assemblyDef, assemblyName, tx);
-            IndexTypeMethods(conn, assemblyDef, assemblyName, tx);
+            var methodBodies = IndexTypeMethods(conn, assemblyDef, assemblyName, tx);
             IndexTypeHierarchy(conn, assemblyDef, assemblyName, tx);
+            BuildLsaEmbeddings(methodBodies);
         }
         catch (Exception ex)
         {
@@ -807,8 +808,10 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         }
     }
 
-    private void IndexTypeMethods(SqliteConnection conn, AssemblyDefinition assemblyDef, string assemblyName, SqliteTransaction? tx)
+    private List<(string id, string body)> IndexTypeMethods(SqliteConnection conn, AssemblyDefinition assemblyDef, string assemblyName, SqliteTransaction? tx)
     {
+        var methodBodies = new List<(string id, string body)>();
+
         var insertMethod = conn.Cmd(@"INSERT OR REPLACE INTO symbols (id, assembly, full_name, namespace, name, kind, signature, summary)
                 VALUES (@id, @assembly, @fullName, @ns, @name, 'Method', @signature, @summary)", tx);
         var insertMethodBody = conn.Cmd(@"INSERT INTO methods (symbol_id, declaring_type, body, summary, source_file, start_line,
@@ -861,6 +864,11 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     ("@name", method.Name), ("@signature", signature),
                     ("@summary", summary ?? string.Empty),
                 }).ExecuteNonQuery();
+
+                if (body != null)
+                {
+                    methodBodies.Add((methodId, body));
+                }
 
                 if (body != null)
                 {
@@ -928,6 +936,8 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             // Interface implementation detection
             ExtractInterfaceImplementations(conn, assemblyDef, type, assemblyName, insertImpl);
         }
+
+        return methodBodies;
     }
 
     private void ExtractCallGraph(SqliteConnection conn, TypeDefinition[] allTypes, MethodDefinition method, string declaringType, string assemblyName, SqliteCommand insertCallee, SqliteCommand insertCaller, SqliteCommand insertEdge)
@@ -1482,6 +1492,128 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 results.Add(reader.GetString(0));
             return results.AsReadOnly();
         }
+    }
+
+    private void BuildLsaEmbeddings(List<(string id, string body)> methodBodies)
+    {
+        // Filter out empty bodies
+        var bodies = methodBodies.Where(m => !string.IsNullOrEmpty(m.body)).ToList();
+        if (bodies.Count == 0)
+            return;
+
+        try
+        {
+            LsaEmbedder.BuildAndStore(_databasePath, bodies);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"LSA embedding build failed: {ex.Message}");
+        }
+    }
+
+    private bool HasLsaData()
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+            var cmd = conn.Cmd("SELECT COUNT(*) FROM method_embeddings");
+            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
+        }
+    }
+
+    /// <summary>
+    /// Default BM25 / semantic fusion weights. Adjusted per query type at runtime.
+    /// </summary>
+    private const double DefaultBm25Weight = 0.75;
+    private const double DefaultSemanticWeight = 0.25;
+
+    /// <summary>
+    /// Short query keywords (1-2 tokens) benefit from BM25; descriptive queries benefit from semantic.
+    /// </summary>
+    private static (double bm25, double semantic) QueryFusionWeights(string query)
+    {
+        var tokenCount = query.Split(new[] { ' ', '.', '_', '-', '(', ')', ':', ',' },
+                System.StringSplitOptions.RemoveEmptyEntries).Length;
+
+        // Single-token query: pure BM25 (semantic needs multiple terms to be meaningful)
+        if (tokenCount <= 1)
+            return (1.0, 0.0);
+
+        // 2-token query: still BM25-heavy
+        if (tokenCount == 2)
+            return (0.85, 0.15);
+
+        // 3-4 tokens: balanced
+        if (tokenCount <= 4)
+            return (DefaultBm25Weight, DefaultSemanticWeight);
+
+        // 5+ tokens: descriptive query, lean toward semantic
+        return (0.6, 0.4);
+    }
+
+    private IReadOnlyList<SearchResult> SearchWithSemantic(IReadOnlyList<SearchResult> bm25Results, string query, int limit)
+    {
+        var stored = LsaEmbedder.LoadStored(_databasePath);
+        if (stored.Count == 0)
+            return bm25Results;
+
+        var vocab = LsaEmbedder.LoadVocabulary(_databasePath);
+        if (vocab.Count == 0)
+            return bm25Results;
+
+        var components = LsaEmbedder.LoadComponents(_databasePath);
+        if (components.Length == 0)
+            return bm25Results;
+
+        // Load IDF for query-time weighting
+        var idf = LsaEmbedder.LoadIdf(_databasePath);
+
+        // Project query into latent space
+        var queryEmbedding = LsaEmbedder.ComputeQueryEmbedding(query, vocab, components, idf);
+
+        // Compute cosine similarity for each result
+        var semanticScores = new Dictionary<string, double>();
+        foreach (var result in bm25Results)
+        {
+            if (stored.TryGetValue(result.SymbolId, out var emb))
+                semanticScores[result.SymbolId] = LsaEmbedder.CosineSimilarity(queryEmbedding, emb);
+        }
+
+        // Adaptive fusion weights based on query length
+        var (bm25Weight, semanticWeight) = QueryFusionWeights(query);
+
+        // Fuse BM25 and semantic scores
+        // Normalize BM25 scores to [0,1] range using min-max normalization
+        double maxBm25 = bm25Results.Max(r => r.RelevanceScore);
+        double minBm25 = bm25Results.Min(r => r.RelevanceScore);
+        double bm25Range = maxBm25 - minBm25;
+
+        var fused = new List<SearchResult>(bm25Results);
+        foreach (var sr in fused)
+        {
+            // Normalize BM25 to [0,1]
+            double normalizedBm25 = bm25Range > 0
+                ? (sr.RelevanceScore - minBm25) / bm25Range
+                : 0.5;
+
+            if (semanticScores.TryGetValue(sr.SymbolId, out var semScore))
+            {
+                // Cosine similarity is in [-1, 1]; clamp to [0, 1] for fusion
+                double normalizedSemantic = Math.Max(0, semScore);
+
+                // Weighted average with query-adaptive weights
+                sr.RelevanceScore = normalizedBm25 * bm25Weight + normalizedSemantic * semanticWeight;
+            }
+            else
+            {
+                // No semantic score — use normalized BM25
+                sr.RelevanceScore = normalizedBm25;
+            }
+        }
+
+        fused.Sort((a, b) => b.RelevanceScore.CompareTo(a.RelevanceScore));
+        return [.. fused.Take(limit)];
     }
 
     public void Dispose() { }

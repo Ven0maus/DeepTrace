@@ -14,6 +14,27 @@ public static class Bm25Scorer
     private static readonly ConcurrentDictionary<string, string[]> _tokenCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// English stopword set — mirrors LsaEmbedder to keep BM25 and LSA tokenization consistent.
+    /// </summary>
+    private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
+        "of", "with", "by", "from", "is", "are", "was", "were", "be", "been",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "shall", "can", "this", "that", "these",
+        "those", "it", "its", "not", "no", "if", "then", "else", "as",
+        "load", "data", "get", "set", "create", "update", "delete", "save",
+        "call", "handle", "process", "perform", "execute",
+        "provide", "enable", "disable", "initialize", "configure", "validate",
+        "parse", "format", "convert", "transform", "build", "make", "find",
+        "search", "query", "read", "write", "open", "close", "start", "stop",
+        "add", "remove", "insert", "clear", "reset", "apply",
+        "show", "hide", "display", "render", "draw", "click", "press",
+        "select", "toggle", "send", "receive", "connect", "disconnect",
+        "throw", "catch", "try", "finally", "using", "new", "null",
+    };
+
+    /// <summary>
     /// Score a search result against a query.
     /// </summary>
     public static double Score(SearchResult result, string query)
@@ -64,7 +85,8 @@ public static class Bm25Scorer
             var lower = text.ToLowerInvariant();
             return lower.Split(new[] { ' ', '.', '_', '-', '(', ')', ':', ',' },
                 System.StringSplitOptions.RemoveEmptyEntries)
-                .Where(t => t.Length >= 2)
+                .Where(t => t.Length >= 1)
+                .Where(t => !Stopwords.Contains(t))
                 .Distinct()
                 .ToArray();
         });

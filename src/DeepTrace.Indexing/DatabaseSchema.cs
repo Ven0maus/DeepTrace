@@ -198,5 +198,23 @@ internal static class DatabaseSchema
             method_name TEXT NOT NULL,
             PRIMARY KEY (implementing_type_id, interface_name, method_name)
         );
+
+        -- LSA semantic embeddings (dense vectors stored as packed binary)
+        CREATE TABLE IF NOT EXISTS method_embeddings (
+            method_id TEXT PRIMARY KEY,
+            embedding BLOB NOT NULL
+        );
+
+        -- LSA vocabulary (term -> index mapping)
+        CREATE TABLE IF NOT EXISTS lsa_vocab (
+            term TEXT PRIMARY KEY,
+            ""index"" INTEGER NOT NULL
+        );
+
+        -- LSA principal components (one row per dimension, packed binary)
+        CREATE TABLE IF NOT EXISTS lsa_components (
+            dim INTEGER PRIMARY KEY,
+            embedding BLOB NOT NULL
+        );
     ";
 }
