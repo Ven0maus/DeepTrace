@@ -18,12 +18,10 @@ Use this skill when working with the DeepTrace CLI to index, search, and investi
 
 ## CLI Usage
 
-```bash
-# Build the project
-dotnet build DeepTrace.slnx
+The `deeptrace` tool is installed globally via `dotnet tool install --global deeptrace`.
 
-# Run commands via dotnet
-dotnet run --project src/DeepTrace.Cli -- <command> [args...]
+```bash
+deeptrace <command> [args...]
 ```
 
 ### `--db <path>` flag
@@ -32,10 +30,10 @@ All commands accept `--db <path>` to target a specific database. Each game gets 
 
 ```bash
 # Index a game into a named database
-dotnet run --project src/DeepTrace.Cli -- --db games/unity.db index C:/Games/UnityGame
+deeptrace --db games/unity.db index C:/Games/UnityGame
 
 # Search that game
-dotnet run --project src/DeepTrace.Cli -- --db games/unity.db search "NPC"
+deeptrace --db games/unity.db search "NPC"
 ```
 
 Without `--db`, all commands use `deeptrace.db` in the current working directory.
@@ -150,9 +148,9 @@ Then re-run `investigate` — the workflow loads SQLite observations and boosts 
 ### Multi-game workflow
 
 ```bash
-dotnet run -- --db games/unity.db index C:/Games/UnityGame
-dotnet run -- --db games/steamgame.db index C:/Games/SteamGame
-dotnet run -- --db games/unity.db search "NPC"
+deeptrace --db games/unity.db index C:/Games/UnityGame
+deeptrace --db games/steamgame.db index C:/Games/SteamGame
+deeptrace --db games/unity.db search "NPC"
 ```
 
 ## Full Documentation
