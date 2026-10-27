@@ -209,4 +209,4 @@ var report = workflow.Investigate("How does the game greet players?");
 
 ## License
 
-To be determined.
+[MIT](LICENSE)
