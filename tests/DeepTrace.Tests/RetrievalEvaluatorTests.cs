@@ -44,6 +44,8 @@ public class RetrievalEvaluatorTests
         public IReadOnlyList<string> GetInterfaceImplementations(string interfaceName, string methodName) => throw new NotImplementedException();
         public IReadOnlyList<string> GetEngineCallbacks(string typeSymbolId) => throw new NotImplementedException();
         public void SetUnityManagedDirectories(params string[] managedDirectories) { }
+        public void IndexAssemblies(IReadOnlyList<Core.Models.AssemblyInfo> assemblies) => throw new NotImplementedException();
+        public void RebuildLsaEmbeddings() { }
     }
 
     [Fact]

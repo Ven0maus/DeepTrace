@@ -54,10 +54,6 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-            // Apply SQLite performance PRAGMAs before any transaction
-            foreach (var pragma in PragmaSettings)
-                conn.Cmd(pragma).ExecuteNonQuery();
-
             var cmd = conn.Cmd("SELECT hash FROM assemblies WHERE name = @name")
                 .P("@name", assembly.Name);
             var hash = cmd.ExecuteScalar() as string;
@@ -85,6 +81,80 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
     public void IndexAssemblyAsync(AssemblyInfo assembly, CancellationToken cancellationToken = default)
         => IndexAssembly(assembly);
+
+    /// <summary>
+    /// Index multiple assemblies in a single shared transaction for better throughput.
+    /// Uses one connection and one transaction for all assemblies.
+    /// </summary>
+    public void IndexAssemblies(IReadOnlyList<AssemblyInfo> assemblies)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+
+            // Apply PRAGMAs (WAL, cache, mmap, FK off) before any transaction
+            foreach (var pragma in PragmaSettings)
+                conn.Cmd(pragma).ExecuteNonQuery();
+
+            using var tx = conn.BeginTransaction();
+
+            var insertAssembly = conn.Cmd(@"INSERT INTO assemblies (name, location, last_write_time, hash, indexed_at)
+                    VALUES (@name, @location, @lastWrite, @hash, @indexedAt)
+                    ON CONFLICT(name) DO UPDATE SET
+                        location=excluded.location, last_write_time=excluded.last_write_time,
+                        hash=excluded.hash, indexed_at=excluded.indexed_at", tx);
+
+            foreach (var assembly in assemblies)
+            {
+                // Skip unchanged
+                var hashCmd = conn.Cmd("SELECT hash FROM assemblies WHERE name = @name", tx).P("@name", assembly.Name);
+                var existingHash = hashCmd.ExecuteScalar() as string;
+                if (existingHash == assembly.Hash)
+                    continue;
+
+                // Delete old entry if exists
+                conn.Cmd("DELETE FROM assemblies WHERE name = @name", tx).P("@name", assembly.Name).ExecuteNonQuery();
+
+                insertAssembly.P(new (string name, object value)[]
+                {
+                    ("@name", assembly.Name),
+                    ("@location", assembly.Location),
+                    ("@lastWrite", assembly.LastWriteTimeUtcTicks),
+                    ("@hash", assembly.Hash),
+                    ("@indexedAt", assembly.IndexedAt.ToString("o")),
+                }).ExecuteNonQuery();
+
+                IndexAssemblyMetadata(conn, assembly, tx);
+            }
+
+            tx.Commit();
+        }
+    }
+
+    /// <summary>
+    /// Rebuild LSA embeddings from all indexed method bodies.
+    /// Call once after all assemblies are indexed.
+    /// </summary>
+    public void RebuildLsaEmbeddings()
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+
+            foreach (var pragma in PragmaSettings)
+                conn.Cmd(pragma).ExecuteNonQuery();
+
+            var cmd = conn.Cmd("SELECT symbol_id, body FROM methods WHERE body IS NOT NULL AND body != ''");
+            using var reader = cmd.ExecuteReader();
+            var bodies = new List<(string id, string body)>();
+            while (reader.Read())
+                bodies.Add((reader.GetString(0), reader.GetString(1)));
+
+            BuildLsaEmbeddings(bodies);
+        }
+    }
 
     public IReadOnlyList<TypeInfo> GetTypes(string assemblyName)
     {
@@ -754,6 +824,10 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
         conn.Open();
 
+        // Apply performance PRAGMAs once at init (WAL, cache, mmap, etc.)
+        foreach (var pragma in PragmaSettings)
+            conn.Cmd(pragma).ExecuteNonQuery();
+
         // Drop all triggers to avoid stale triggers from old schema versions
         using var rdr = conn.Cmd(@"SELECT name FROM sqlite_master WHERE type='trigger'").ExecuteReader();
         while (rdr.Read())
@@ -788,7 +862,6 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             IndexTypes(conn, assemblyDef, assemblyName, tx);
             var methodBodies = IndexTypeMethods(conn, assemblyDef, assemblyName, tx);
             IndexTypeHierarchy(conn, assemblyDef, assemblyName, tx);
-            BuildLsaEmbeddings(methodBodies);
         }
         catch (Exception ex)
         {
@@ -838,7 +911,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
         var insertMethod = conn.Cmd(@"INSERT OR REPLACE INTO symbols (id, assembly, full_name, namespace, name, kind, signature, summary)
                 VALUES (@id, @assembly, @fullName, @ns, @name, 'Method', @signature, @summary)", tx);
-        var insertMethodBody = conn.Cmd(@"INSERT INTO methods (symbol_id, declaring_type, body, summary, source_file, start_line,
+        var insertMethodBody = conn.Cmd(@"INSERT OR REPLACE INTO methods (symbol_id, declaring_type, body, summary, source_file, start_line,
                 start_column, end_line, end_column, is_static, is_virtual, is_abstract, is_override)
                 VALUES (@id, @declaringType, @body, @summary, @sourceFile, @startLine, @startCol,
                 @endLine, @endCol, @isStatic, @isVirtual, @isAbstract, @isOverride)", tx);

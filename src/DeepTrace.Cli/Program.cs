@@ -4,8 +4,9 @@ using DeepTrace.Core.Runtime;
 using DeepTrace.Decompiler;
 using DeepTrace.Indexing;
 
-// Parse --db flag (default: deeptrace.db)
-string dbPath = "deeptrace.db";
+// Parse --db flag (default: deeptrace.db in the CLI bin directory)
+string defaultDb = Path.Combine(Path.GetDirectoryName(typeof(Program).Assembly.Location)!, "deeptrace.db");
+string dbPath = args.Length > 0 && args[0] == "--db" && args.Length > 2 ? args[2] : defaultDb;
 var filteredArgs = new List<string>();
 for (int i = 0; i < args.Length; i++)
 {
@@ -68,7 +69,8 @@ switch (command)
             if (managedDirs.Count > 0)
                 indexer.SetUnityManagedDirectories(managedDirs.ToArray());
 
-            var indexed = 0;
+            // Filter to assemblies that need indexing
+            var toIndex = new List<AssemblyInfo>();
             foreach (var assembly in assemblies)
             {
                 if (indexer.IsAssemblyIndexed(assembly.Name))
@@ -80,11 +82,28 @@ switch (command)
                         continue;
                     }
                 }
-                Console.WriteLine($"  Indexing: {assembly.Name}...");
-                indexer.IndexAssembly(assembly);
-                indexed++;
+                toIndex.Add(assembly);
             }
-            Console.WriteLine($"Indexed {indexed}/{assemblies.Count} assemblies.");
+
+            if (toIndex.Count > 0)
+            {
+                Console.WriteLine($"  Indexing {toIndex.Count} assemblies...");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                indexer.IndexAssemblies(toIndex);
+                sw.Stop();
+                Console.WriteLine($"  Indexed {toIndex.Count} assemblies in {sw.Elapsed:mm\\:ss\\.fff}");
+
+                // Rebuild LSA embeddings once after all assemblies
+                Console.WriteLine("  Rebuilding LSA embeddings...");
+                sw.Restart();
+                indexer.RebuildLsaEmbeddings();
+                sw.Stop();
+                Console.WriteLine($"  LSA rebuild done in {sw.Elapsed:mm\\:ss\\.fff}");
+            }
+            else
+            {
+                Console.WriteLine("  All assemblies already up to date.");
+            }
             break;
         }
 

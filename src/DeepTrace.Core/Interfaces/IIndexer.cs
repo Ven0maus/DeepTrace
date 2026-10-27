@@ -147,4 +147,17 @@ public interface IIndexer
     /// </summary>
     /// <param name="managedDirectories">Paths to Unity managed assembly directories.</param>
     void SetUnityManagedDirectories(params string[] managedDirectories);
+
+    /// <summary>
+    /// Index multiple assemblies in a single batch operation using a shared
+    /// connection and transaction for significantly better throughput.
+    /// </summary>
+    /// <param name="assemblies">Assemblies to index.</param>
+    void IndexAssemblies(IReadOnlyList<AssemblyInfo> assemblies);
+
+    /// <summary>
+    /// Rebuild LSA embeddings from all indexed method bodies.
+    /// Should be called once after all assemblies are indexed, not per-assembly.
+    /// </summary>
+    void RebuildLsaEmbeddings();
 }
