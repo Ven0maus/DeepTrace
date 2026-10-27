@@ -20,8 +20,8 @@ Target: decompiled .NET assemblies and BepInEx-based mods.
 ## Quick start
 
 ```bash
-# Build
-dotnet build DeepTrace.slnx
+# Install tool
+dotnet tool install --global deeptrace
 
 # Discover managed assemblies
 deeptrace discover ./GameDirectory
