@@ -131,7 +131,7 @@ Each recipe runs multiple queries, deduplicates results, and sorts by BM25 score
 - Decompiler extracts method bodies by brace-counting from type source. Edge cases with nested types or complex generics may produce incomplete extraction.
 - `IlspyDecompiler` caches full type source per assembly path. Large assemblies consume memory.
 - BM25 scoring is heuristic. No learned parameters. Exact name match gives highest weight.
-- Runtime observer is in-memory only. No persistent instrumentation (BepInEx/HarmonyX hooks not implemented).
+- Runtime observer stores in memory; observations persist via `import-observations <filePath>` or `observe`. No persistent instrumentation (BepInEx/HarmonyX hooks not implemented).
 - No semantic search. Only keyword-based BM25 and text matching.
 - No LLM integration yet. Investigation workflow is fully deterministic.
 
@@ -157,7 +157,8 @@ dotnet run --project src/DeepTrace.Cli -- [--db <path>] <command> [args...]
 | `engine-callbacks <typeId>` | Show detected Unity/Unreal engine lifecycle callbacks. |
 | `interface-implementations <iface> <method>` | Show concrete implementations of an interface method. |
 | `investigate <question>` | Run full AI investigation workflow. Produces structured report. |
-| `observe <symbolId> <durationMs> [params] [return]` | Record a runtime observation. |
+| `observe <symbolId> <durationMs> [params] [return]` | Record a single runtime observation. |
+| `import-observations <filePath>` | Bulk import runtime observations from a JSON file. |
 | `runtime <symbolId>` | Show runtime observations for a symbol. |
 | `recipes [name]` | List all recipes or execute a specific one. |
 | `evaluate <dllPath>` | Measure retrieval quality (precision/recall/F1). |

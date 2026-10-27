@@ -129,5 +129,67 @@ public class RuntimeObservationPersistenceTests
         var obs = indexer.GetRuntimeObservations("nonexistent");
         Assert.Empty(obs);
     }
+
+    [Fact]
+    public void ImportRuntimeObservations_BulkImport_PersistsAll()
+    {
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
+
+        var observations = new List<RuntimeObservation>
+        {
+            new()
+            {
+                Id = "bulk_1",
+                SymbolId = "sym_1",
+                FullyQualifiedName = "A.Method",
+                Assembly = "TestAssembly",
+                Timestamp = 100,
+                Depth = 0,
+                DurationMs = 5.0,
+            },
+            new()
+            {
+                Id = "bulk_2",
+                SymbolId = "sym_1",
+                FullyQualifiedName = "A.Method",
+                Assembly = "TestAssembly",
+                Timestamp = 200,
+                Depth = 1,
+                DurationMs = 10.0,
+            },
+            new()
+            {
+                Id = "bulk_3",
+                SymbolId = "sym_2",
+                FullyQualifiedName = "B.Method",
+                Assembly = "TestAssembly",
+                Timestamp = 300,
+                Depth = 0,
+                DurationMs = 15.0,
+            },
+        };
+
+        var jsonPath = Path.Combine(_testDir, "observations.json");
+        File.WriteAllText(jsonPath, System.Text.Json.JsonSerializer.Serialize(observations));
+
+        indexer.ImportRuntimeObservations(jsonPath, out var count);
+
+        Assert.Equal(3, count);
+        var sym1Obs = indexer.GetRuntimeObservations("sym_1");
+        var sym2Obs = indexer.GetRuntimeObservations("sym_2");
+        var allObs = indexer.GetAllRuntimeObservations();
+
+        Assert.Equal(2, sym1Obs.Count);
+        Assert.Single(sym2Obs);
+        Assert.Equal(3, allObs.Count);
+    }
+
+    [Fact]
+    public void ImportRuntimeObservations_ThrowsOnMissingFile()
+    {
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
+        Assert.Throws<System.IO.FileNotFoundException>(() =>
+            indexer.ImportRuntimeObservations(Path.Combine(_testDir, "nonexistent.json"), out _));
+    }
 }
 

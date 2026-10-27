@@ -85,7 +85,10 @@ Find all references to a symbol (type refs, callers, callees).
 Run AI investigation workflow. Extracts concepts, searches, traverses caller/callee graphs, produces structured report.
 
 ### `observe <symbolId> <durationMs> [parametersJson] [returnValueJson]`
-Record a runtime observation. Stored in SQLite.
+Record a single runtime observation manually. Assembly extracted from symbol ID. Use for quick one-off checks.
+
+### `import-observations <filePath>`
+Bulk import runtime observations from a JSON file. File must contain an array of `RuntimeObservation` objects with all fields: Id, SymbolId, FullyQualifiedName, Assembly, Timestamp, Depth, Parameters, ReturnValue, DurationMs. Use for automated hook data.
 
 ### `runtime <symbolId>`
 Show runtime observations for a symbol.
@@ -127,6 +130,22 @@ Pre-defined patterns for common modding tasks:
 6. `investigate "How does the game greet players?"` — full AI investigation
 7. `recipes "Find Extension Points"` — find patch targets
 8. `evaluate <dllPath>` — measure search quality
+
+### Runtime observation workflow
+
+When investigation identifies candidate methods, correlate with actual runtime behavior:
+
+**Manual (single method):**
+```bash
+deeptrace observe "<symbolId>" <durationMs> [params] [return]
+```
+
+**Automated (batch from hooks):**
+```bash
+deeptrace import-observations <path-to-json-file>
+```
+
+Then re-run `investigate` — the workflow loads SQLite observations and boosts confidence on observed methods.
 
 ### Multi-game workflow
 

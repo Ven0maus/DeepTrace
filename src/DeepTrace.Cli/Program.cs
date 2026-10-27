@@ -235,8 +235,9 @@ switch (command)
             var parameters = args.Length > 3 ? args[3] : null;
             var returnValue = args.Length > 4 ? args[4] : null;
             var observer = new DeepTrace.Core.Runtime.InMemoryRuntimeObserver();
-            var assembly = "Unknown";
-            var fqName = symbolId.Split("::").LastOrDefault() ?? symbolId;
+            var parts = symbolId.Split("::");
+            var assembly = parts.Length > 0 ? parts[0] : "Unknown";
+            var fqName = parts.Length > 0 ? string.Join("::", parts.Skip(1)) : symbolId;
             observer.RecordCall(symbolId, fqName, assembly, parameters, returnValue, durationMs);
             var observation = new RuntimeObservation
             {
@@ -252,6 +253,24 @@ switch (command)
             };
             indexer.StoreRuntimeObservation(observation);
             Console.WriteLine($"Observed: {symbolId} ({durationMs}ms)");
+            break;
+        }
+
+    case "import-observations":
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] import-observations <filePath>");
+                return;
+            }
+            var filePath = args[1];
+            if (!File.Exists(filePath))
+            {
+                Console.Error.WriteLine($"File not found: {filePath}");
+                return;
+            }
+            indexer.ImportRuntimeObservations(filePath, out var count);
+            Console.WriteLine($"Imported {count} runtime observation(s) from {filePath}");
             break;
         }
 

@@ -1318,6 +1318,47 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         }
     }
 
+    /// <summary>
+    /// Bulk import runtime observations from a JSON array file.
+    /// </summary>
+    /// <param name="filePath">Path to a JSON file containing an array of RuntimeObservation objects.</param>
+    /// <param name="count">Number of observations imported.</param>
+    public void ImportRuntimeObservations(string filePath, out int count)
+    {
+        lock (_lock)
+        {
+            var json = File.ReadAllText(filePath);
+            var observations = System.Text.Json.JsonSerializer.Deserialize<List<RuntimeObservation>>(json)
+                ?? throw new InvalidOperationException("JSON file must contain an array of observation objects.");
+
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            var sql = @"INSERT INTO runtime_observations (id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms)
+                    VALUES (@id, @symbolId, @fqName, @assembly, @timestamp, @depth, @params, @returnValue, @durationMs)";
+
+            var inserted = 0;
+            foreach (var obs in observations)
+            {
+                using var cmd = conn.Cmd(sql, tx)
+                    .P("@id", obs.Id)
+                    .P("@symbolId", obs.SymbolId)
+                    .P("@fqName", obs.FullyQualifiedName)
+                    .P("@assembly", obs.Assembly)
+                    .P("@timestamp", obs.Timestamp)
+                    .P("@depth", obs.Depth)
+                    .P("@params", (object?)obs.Parameters)
+                    .P("@returnValue", (object?)obs.ReturnValue)
+                    .P("@durationMs", obs.DurationMs);
+                cmd.ExecuteNonQuery();
+                inserted++;
+            }
+
+            tx.Commit();
+            count = inserted;
+        }
+    }
+
     public IReadOnlyList<RuntimeObservation> GetRuntimeObservations(string symbolId)
     {
         lock (_lock)

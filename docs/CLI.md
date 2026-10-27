@@ -288,7 +288,7 @@ Output: investigation report with request interpretation, discovered execution p
 
 ### `observe`
 
-Record a runtime observation for a method.
+Record a single runtime observation for a method. Use for manual, one-off observations during gameplay.
 
 ```
 deeptrace observe <symbolId> <durationMs> [parametersJson] [returnValueJson]
@@ -296,12 +296,74 @@ deeptrace observe <symbolId> <durationMs> [parametersJson] [returnValueJson]
 
 | Parameter | Description |
 |-----------|-------------|
-| `symbolId` | Indexed symbol ID (e.g., "TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String") |
+| `symbolId` | Indexed symbol ID (e.g., `"TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String"`) |
 | `durationMs` | Call duration in milliseconds |
 | `parametersJson` | Optional JSON-serialized parameters |
 | `returnValueJson` | Optional JSON-serialized return value |
 
-Observations are stored in the SQLite database and used to boost confidence in investigation reports.
+**Assembly** is extracted from the first segment of the symbol ID. **FullyQualifiedName** is derived from the remaining segments.
+
+**Example — manual observation after AI investigation:**
+```bash
+# AI investigation identified this method as a candidate
+deeptrace observe "UnityGame::Player.PlayerController::UpdateMovement::UpdateMovement()" 15 '{"velocity":1.0}' '"null"'
+# Output: Observed: UnityGame::Player.PlayerController::UpdateMovement::UpdateMovement() (15ms)
+```
+
+**When to use:** Single method, manual timing, quick verification.
+
+### `import-observations`
+
+Bulk import runtime observations from a JSON file. Use when external hooks (BepInEx/HarmonyX) have collected calls during gameplay.
+
+```
+deeptrace import-observations <filePath>
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `filePath` | Path to a JSON file containing an array of observation objects |
+
+**JSON format** — array of `RuntimeObservation` objects:
+```json
+[
+  {
+    "Id": "obs_abc123",
+    "SymbolId": "TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String",
+    "FullyQualifiedName": "TestLib.Greeter.Greet",
+    "Assembly": "TestLib",
+    "Timestamp": 1700000000000,
+    "Depth": 0,
+    "Parameters": "{\"name\":\"World\"}",
+    "ReturnValue": "\"Hello, World!\"",
+    "DurationMs": 1.5
+  }
+]
+```
+
+All fields are required except `Parameters` and `ReturnValue` (can be `null`).
+
+**Example — batch import from automated hook data:**
+```bash
+# External BepInEx plugin collected calls during gameplay, wrote to runtime_data.json
+deeptrace import-observations runtime_data.json
+# Output: Imported 47 runtime observation(s) from runtime_data.json
+```
+
+**When to use:** Automated collection from runtime hooks, batch processing, preserves full metadata (assembly, depth, timestamp).
+
+**JSON field reference:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `Id` | string | Unique observation ID (e.g., `"obs_abc123"`) |
+| `SymbolId` | string | Indexed symbol ID matching DeepTrace format |
+| `FullyQualifiedName` | string | Fully qualified method name |
+| `Assembly` | string | Assembly name |
+| `Timestamp` | long | Unix millisecond timestamp |
+| `Depth` | int | Call depth in invocation chain (0 = top-level) |
+| `Parameters` | string\|null | JSON-serialized parameters |
+| `ReturnValue` | string\|null | JSON-serialized return value or exception |
+| `DurationMs` | double | Call duration in milliseconds |
 
 ### `runtime`
 
