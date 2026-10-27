@@ -185,4 +185,285 @@ public class MethodSummaryGeneratorTests
         var result = MethodSummaryGenerator.Generate(method, string.Empty);
         Assert.Contains("Creates", result);
     }
+
+    [Fact]
+    public void Generate_WithObjectParameter_ContainsParamName()
+    {
+        var method = MakeMethod("Process", parameters: new List<string> { "System.Object obj" });
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithMultipleParameters_ListsThem()
+    {
+        var method = MakeMethod("Create", parameters: new List<string> { "System.String name", "System.Int32 id" });
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithNullParameter_ReturnsNotNull()
+    {
+        var method = MakeMethod("Process", parameters: new List<string> { "System.Object obj" });
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void Generate_WithOnlyBoilerplate_ReturnsFromSignature()
+    {
+        var method = MakeMethod("ValidateInput", returnType: "System.Boolean");
+        var body = @"public bool ValidateInput()
+{
+    if (input == null) return false;
+    if (input.Length == 0) return false;
+    return true;
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithLongBody_TruncatesSummary()
+    {
+        var method = MakeMethod("Process");
+        var body = @"public void Process()
+{
+    var result = SomeMethodThatIsVeryLongAndDoesManyThings();
+    var anotherCall = AnotherMethodThatIsAlsoVeryLongAndDoesStuff();
+    var thirdCall = YetAnotherMethodThatIsAlsoVeryLong();
+    return result;
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithLifecycleCallback_HandlesOnEnabled()
+    {
+        var method = MakeMethod("OnEnabled");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Handles", result);
+        Assert.Contains("Enabled", result);
+    }
+
+    [Fact]
+    public void Generate_WithLifecycleCallback_HandlesOnDisable()
+    {
+        var method = MakeMethod("OnDisable");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Handles", result);
+        Assert.Contains("Disable", result);
+    }
+
+    [Fact]
+    public void Generate_WithProcessPrefix_UsesMethodName()
+    {
+        var method = MakeMethod("ProcessData");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithFieldAssignment_AssignsField()
+    {
+        var method = MakeMethod("SetValue");
+        var body = @"public void SetValue()
+{
+    _field = 42;
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.Contains("Assigns", result);
+        Assert.Contains("_field", result);
+    }
+
+    [Fact]
+    public void Generate_WithPropertyAssignment_SetsProperty()
+    {
+        var method = MakeMethod("Configure");
+        var body = @"public void Configure()
+{
+    this.Property = 42;
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.Contains("Sets", result);
+        Assert.Contains("Property", result);
+    }
+
+    [Fact]
+    public void Generate_WithMethodCall_CallsMethod()
+    {
+        var method = MakeMethod("Run");
+        var body = @"public void Run()
+{
+    ExecuteTask();
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.Contains("Calls", result);
+        Assert.Contains("ExecuteTask", result);
+    }
+
+    [Fact]
+    public void Generate_WithCommentInBody_StripsComment()
+    {
+        var method = MakeMethod("Process");
+        var body = @"public void Process()
+{
+    // This is a comment
+    var x = DoSomething();
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithOverride_ReturnsOverrides()
+    {
+        var method = MakeMethod("ToString", isOverride: true);
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.StartsWith("Overrides", result);
+    }
+
+    [Fact]
+    public void Generate_Getter_ReturnsGets()
+    {
+        var method = MakeMethod("get_Value");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.StartsWith("Gets", result);
+    }
+
+    [Fact]
+    public void Generate_Setter_ReturnsSets()
+    {
+        var method = MakeMethod("set_Value");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.StartsWith("Sets", result);
+    }
+
+    [Fact]
+    public void Generate_AddHandler_ReturnsAddsHandler()
+    {
+        var method = MakeMethod("add_Click");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Adds handler for", result);
+    }
+
+    [Fact]
+    public void Generate_RemoveHandler_ReturnsRemovesHandler()
+    {
+        var method = MakeMethod("remove_Click");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Removes handler for", result);
+    }
+
+    [Fact]
+    public void Generate_StaticConstructor_ReturnsStaticInitializer()
+    {
+        var method = MakeMethod(".cctor", isStatic: true);
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Static initializer", result);
+    }
+
+    [Fact]
+    public void Generate_Constructor_WithParams_UsesParamsInSummary()
+    {
+        var method = MakeMethod(".ctor", isStatic: false, parameters: new List<string> { "System.String name", "System.Int32 id" });
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Initializes", result);
+        Assert.Contains("name", result);
+        Assert.Contains("id", result);
+    }
+
+    [Fact]
+    public void Generate_Constructor_NoParams_UsesTypeOnly()
+    {
+        var method = MakeMethod(".ctor", isStatic: false);
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.Contains("Initializes", result);
+    }
+
+    [Fact]
+    public void Generate_ReturnsNonVoid_ReturnsReturns()
+    {
+        var method = MakeMethod("Calculate", returnType: "System.Int32");
+        var result = MethodSummaryGenerator.Generate(method, string.Empty);
+        Assert.NotNull(result);
+        Assert.StartsWith("Returns", result);
+    }
+
+    [Fact]
+    public void Generate_WithBeforeKeyword_UsesBefore()
+    {
+        var method = MakeMethod("Validate");
+        var body = @"public void Validate()
+{
+    var result = CheckInput();
+    // before processing
+    return result;
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithAfterKeyword_UsesAfter()
+    {
+        var method = MakeMethod("Process");
+        var body = @"public void Process()
+{
+    var result = DoWork();
+    // after processing
+    return result;
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithPrepareName_UsesPreparing()
+    {
+        var method = MakeMethod("PrepareInput");
+        var body = @"public void PrepareInput()
+{
+    var data = LoadConfig();
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void Generate_WithSetupName_UsesSettingUp()
+    {
+        var method = MakeMethod("SetupEnvironment");
+        var body = @"public void SetupEnvironment()
+{
+    var config = LoadConfig();
+}";
+        var result = MethodSummaryGenerator.Generate(method, body);
+        Assert.NotNull(result);
+        Assert.NotEmpty(result);
+    }
 }

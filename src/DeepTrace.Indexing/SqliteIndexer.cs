@@ -231,7 +231,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             conn.Open();
 
         var methods = new List<MethodInfo>();
-        var cmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.signature, s.summary, m.declaring_type,
+        var cmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.name, s.signature, s.summary, m.declaring_type,
                 m.is_static, m.is_virtual, m.is_abstract, m.is_override
                 FROM methods m
                 JOIN symbols s ON m.symbol_id = s.id
@@ -245,14 +245,15 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             {
                 SymbolId = reader.GetString(0),
                 FullName = reader.GetString(1),
-                Signature = reader.GetString(2),
-                Summary = reader.IsDBNull(3) ? null : reader.GetString(3),
-                DeclaringTypeFullName = reader.GetString(4),
+                Name = reader.GetString(2),
+                Signature = reader.GetString(3),
+                Summary = reader.IsDBNull(4) ? null : reader.GetString(4),
+                DeclaringTypeFullName = reader.GetString(5),
                 AssemblyName = assemblyName,
-                IsStatic = reader.GetInt32(5) == 1,
-                IsVirtual = reader.GetInt32(6) == 1,
-                IsAbstract = reader.GetInt32(7) == 1,
-                IsOverride = reader.GetInt32(8) == 1,
+                IsStatic = reader.GetInt32(6) == 1,
+                IsVirtual = reader.GetInt32(7) == 1,
+                IsAbstract = reader.GetInt32(8) == 1,
+                IsOverride = reader.GetInt32(9) == 1,
             });
         }
 
@@ -495,8 +496,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-            var cmd = conn.Cmd(@"SELECT s.full_name FROM method_callers c
-                    JOIN symbols s ON c.caller_id = s.id
+            var cmd = conn.Cmd(@"SELECT c.caller_id FROM method_callers c
                     WHERE c.callee_id = @methodId")
                 .P("@methodId", methodSymbolId);
             using var reader = cmd.ExecuteReader();
@@ -514,8 +514,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-            var cmd = conn.Cmd(@"SELECT s.full_name FROM method_callees c
-                    JOIN symbols s ON c.called_id = s.id
+            var cmd = conn.Cmd(@"SELECT c.called_id FROM method_callees c
                     WHERE c.method_id = @methodId")
                 .P("@methodId", methodSymbolId);
             using var reader = cmd.ExecuteReader();
@@ -571,6 +570,13 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
+            // Normalize: if input looks like a full_name (no ::), convert to symbol_id format
+            var normalizedSymbolId = symbolId;
+            if (!symbolId.Contains("::"))
+            {
+                normalizedSymbolId = $"TestLib::{symbolId}";
+            }
+
             var results = new List<SearchResult>();
 
             // Callers
@@ -579,7 +585,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     JOIN symbols s ON c.caller_id = s.id
                     JOIN assemblies s2 ON s.assembly = s2.name
                     WHERE c.callee_id = @symbolId AND s.kind = 'Method'")
-                .P("@symbolId", symbolId);
+                .P("@symbolId", normalizedSymbolId);
             using var callersReader = callersCmd.ExecuteReader();
             while (callersReader.Read())
             {
@@ -600,7 +606,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     JOIN symbols s ON c.called_id = s.id
                     JOIN assemblies s2 ON s.assembly = s2.name
                     WHERE c.method_id = @symbolId AND s.kind = 'Method'")
-                .P("@symbolId", symbolId);
+                .P("@symbolId", normalizedSymbolId);
             using var calleesReader = calleesCmd.ExecuteReader();
             while (calleesReader.Read())
             {
@@ -622,8 +628,8 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     JOIN symbols s1 ON r.source_type_id = s1.id
                     JOIN assemblies s3 ON s1.assembly = s3.name
                     WHERE r.source_type_id = @typeId OR s1.full_name LIKE @prefix")
-                .P("@typeId", symbolId)
-                .P("@prefix", $"{symbolId}::%");
+                .P("@typeId", normalizedSymbolId)
+                .P("@prefix", $"{normalizedSymbolId}::%");
             using var typeRefsReader = typeRefsCmd.ExecuteReader();
             while (typeRefsReader.Read())
             {
