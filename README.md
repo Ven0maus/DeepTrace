@@ -92,7 +92,7 @@ src/
   DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
   DeepTrace.Cli/          CLI entry point with all commands
 tests/
-  DeepTrace.Tests/        xUnit test suite (249 tests)
+  DeepTrace.Tests/        xUnit test suite (257 tests)
   TestLib/                Self-contained test assembly
   BenchmarkLib/           Benchmark test fixtures
 ```
