@@ -24,16 +24,16 @@ Target: decompiled .NET assemblies and BepInEx-based mods.
 dotnet build DeepTrace.slnx
 
 # Discover managed assemblies
-dotnet run --project src/DeepTrace.Cli -- discover ./GameDirectory
+deeptrace discover ./GameDirectory
 
 # Index for search
-dotnet run --project src/DeepTrace.Cli -- index ./GameDirectory
+deeptrace index ./GameDirectory
 
 # Search
-dotnet run --project src/DeepTrace.Cli -- search "Greeter"
+deeptrace search "Greeter"
 
 # Investigate
-dotnet run --project src/DeepTrace.Cli -- investigate "How does the game greet players?"
+deeptrace investigate "How does the game greet players?"
 ```
 
 ### Multiple game directories
@@ -42,11 +42,11 @@ Use `--db <path>` to target a specific database. Each game gets its own SQLite d
 
 ```bash
 # Index separate games into separate databases
-dotnet run --project src/DeepTrace.Cli -- --db games/unity.db index C:/Games/UnityGame
-dotnet run --project src/DeepTrace.Cli -- --db games/steamgame.db index C:/Games/SteamGame
+deeptrace --db games/unity.db index C:/Games/UnityGame
+deeptrace --db games/steamgame.db index C:/Games/SteamGame
 
 # Search a specific game
-dotnet run --project src/DeepTrace.Cli -- --db games/unity.db search "NPC"
+deeptrace --db games/unity.db search "NPC"
 ```
 
 ## CLI commands
