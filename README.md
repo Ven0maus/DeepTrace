@@ -1,168 +1,134 @@
 # DeepTrace
 
-**AI-powered code intelligence for decompiled .NET games and mod development.**
+Local code intelligence for AI-assisted game mod development.
 
-DeepTrace helps AI coding assistants understand unfamiliar game codebases by indexing assemblies, analyzing code relationships, and tracing gameplay behavior back to its implementation.
+DeepTrace indexes decompiled .NET assemblies, analyzes code relationships, and provides structured search and investigation capabilities for AI coding assistants working with unfamiliar game codebases.
 
-Instead of searching for a method by name and guessing how it works, DeepTrace enables an AI to investigate the existing code, follow relevant call chains, identify dependencies, and find suitable extension points before implementing a mod.
+Target: decompiled .NET assemblies and BepInEx-based mods.
 
-The initial focus is on .NET games and BepInEx mod development, with an architecture designed to support broader code analysis in the future.
+## What it does
 
-## Goals
+- Index assemblies using Mono.Cecil metadata extraction
+- Search by name, signature, namespace, or source body text
+- Rank results with BM25-inspired relevance scoring
+- Analyze structural relationships: callers, callees, type hierarchies, references
+- Run AI investigation workflows with iterative search, caller/callee traversal, and evidence-based reports
+- Record and query runtime observations (via SQLite or in-memory store)
+- Execute pre-defined investigation recipes for common modding tasks
+- Evaluate retrieval quality with precision/recall/F1 metrics
 
-- **Understand unfamiliar codebases** — discover relevant types, methods, and gameplay systems.
-- **Trace behavior** — follow callers, callees, constructors, and initialization paths.
-- **Retrieve actual source** — provide precise method bodies, signatures, and source locations.
-- **Support AI investigation** — expose structured tools that an LLM can use to explore code iteratively.
-- **Bridge static and runtime analysis** — combine decompiled code with optional observations from a running game.
-- **Remain local-first** — index and analyze local assemblies without requiring a remote service for basic functionality.
+## Example workflow
 
-## Example
+```
+deeptrace discover ./GameDirectory
+deeptrace index ./GameDirectory
+deeptrace search "Greeter"
+deeptrace callees "TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String"
+deeptrace investigate "How does the game greet players?"
+```
 
-Consider the request:
+## CLI commands
 
-> Create a new NPC using the same process the game uses to populate a city with NPCs.
-
-A conventional text search might find a method with `NPC` or `Spawn` in its name, but that doesn't establish whether it is the correct entry point.
-
-DeepTrace aims to help an AI investigate the feature systematically:
-
-1. Search for city initialization and population-related code.
-2. Identify candidate NPC creation methods.
-3. Trace callers and callees to reconstruct the creation path.
-4. Inspect constructors, prefabs, initialization routines, and registration logic.
-5. Identify existing APIs or potential HarmonyX patch points.
-6. Present the relevant code and supporting evidence.
-7. Propose an implementation and a validation strategy.
-
-The objective is to reuse the game's existing behavior wherever possible, rather than reimplementing it based on assumptions.
+| Command | Description |
+|---|---|
+| `discover <directory>` | Discover managed assemblies in a directory |
+| `index <directory>` | Index all discovered assemblies |
+| `search <query> [limit]` | Search indexed symbols (BM25-ranked) |
+| `methods <assemblyName>` | List methods in an assembly |
+| `method <symbolId>` | Get method details |
+| `types <assemblyName>` | List types in an assembly |
+| `type <assemblyName> <typeFullName>` | Get single type info |
+| `callers <methodSymbolId>` | Find callers of a method |
+| `callees <methodSymbolId>` | Find callees of a method |
+| `references <symbolId>` | Find all references to a symbol |
+| `investigate <question>` | Run AI investigation workflow |
+| `observe <symbolId> <durationMs>` | Record a runtime observation |
+| `runtime <symbolId>` | Show runtime observations |
+| `recipes [name]` | List or execute investigation recipes |
+| `evaluate <dllPath>` | Measure retrieval quality |
+| `stats` | Show indexer statistics |
 
 ## Architecture
 
-DeepTrace is designed around several cooperating components.
-
-| Component | Responsibility |
-|---|---|
-| Assembly ingestion | Discover and decompile relevant game assemblies |
-| Symbol indexing | Extract types, methods, signatures, and source locations |
-| Structural analysis | Analyze calls, inheritance, references, and object construction |
-| Search engine | Retrieve relevant code using lexical and, optionally, semantic search |
-| Code graph | Navigate relationships between symbols |
-| AI orchestration | Investigate feature requests using structured tools |
-| Runtime integration | Collect optional observations from a running game |
-| CLI | Configure indexing, inspect results, and manage investigations |
-
-The initial implementation prioritizes a working local indexer and searchable symbol database before adding more advanced AI and runtime capabilities.
+```
+src/
+  DeepTrace.Core/         Domain models and interfaces
+    Models/               MethodInfo, TypeInfo, SearchResult, InvestigationReport, etc.
+    Interfaces/           IIndexer, IAssemblyDiscoverer, IDecompiler
+    Ai/                   InvestigationWorkflow, InvestigationTools, InvestigationRecipes
+    Retrieval/            RetrievalEvaluator (precision/recall/F1)
+    Runtime/              RuntimeObservation, IRuntimeObserver, InMemoryRuntimeObserver
+  DeepTrace.Decompiler/   ILSpy-based decompiler wrapper
+  DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
+  DeepTrace.Cli/          CLI entry point with all commands
+tests/
+  DeepTrace.Tests/        xUnit test suite (101 tests)
+```
 
 ## Technology
 
-The intended technology stack includes:
+- C# / .NET 8 (core libraries), .NET 10 (CLI)
+- Mono.Cecil 0.11.6 — assembly metadata extraction
+- ILSpy / ICSharpCode.Decompiler — source body extraction
+- SQLite / FTS5 — local persistence and full-text search
+- SQLitePCLRaw 3.0.5 — native SQLite bindings (SQLite 3.53.4)
+- xUnit — test framework
 
-- **C# / .NET** — primary implementation language.
-- **ILSpy / ICSharpCode.Decompiler** — decompilation of managed assemblies.
-- **Mono.Cecil** — assembly metadata and IL analysis.
-- **SQLite / FTS5** — local persistence and full-text search.
-- **BepInEx / HarmonyX** — optional runtime instrumentation for compatible games.
-- **LLM tool calling** — AI-assisted code exploration and investigation.
+## Investigation recipes
 
-Exact framework versions and dependency choices will be determined by the target runtime and compatibility requirements.
+Pre-defined patterns for common modding tasks:
 
-Unity Mono and Unity IL2CPP require different integration approaches. Initial support should target managed .NET assemblies, with IL2CPP support treated as a separate compatibility concern.
+- **Find Extension Points** — virtual methods, overrides, public instance methods (HarmonyX patch targets)
+- **Trace Initialization** — constructors, static initializers, On* lifecycle methods
+- **Find Service Registrations** — factory methods, Create/Build/From patterns, DI registrations
+- **Find Type Hierarchies** — base types, interfaces, derived type relationships
+- **Find Event Handlers** — event subscriptions, callbacks, handler methods
 
-## AI Tool Interface
+## Investigation workflow
 
-DeepTrace is intended to expose structured operations that an AI can call while investigating a codebase.
+The `investigate` command runs an iterative search workflow:
 
-| Operation | Purpose |
-|---|---|
-| `SearchCode` | Search for relevant types, methods, and source snippets |
-| `GetMethod` | Retrieve a method's signature, body, and metadata |
-| `GetType` | Inspect a type's hierarchy, fields, properties, and methods |
-| `GetCallers` | Find methods that call a selected method |
-| `GetCallees` | Explore methods invoked by a selected method |
-| `SearchReferences` | Find references to a symbol |
-| `GetRelatedMethods` | Discover related lifecycle and initialization methods |
-| `GetRuntimeEvidence` | Retrieve recorded runtime observations when available |
+1. Extract concepts from the question
+2. Search for relevant methods by each concept
+3. Retrieve method bodies and generate summaries
+4. Correlate with runtime observations (if recorded)
+5. Explore caller/callee graphs (bounded depth)
+6. Identify dependencies, extension points, and confidence levels
+7. Produce a structured report
 
-These operations are planned interfaces; their availability depends on implementation progress.
+## Retrieval quality
 
-Results should include stable symbol identifiers, source provenance, and explicit distinctions between confirmed relationships and inferred ones.
+The `evaluate` command measures search quality against known-gold-standard results:
 
-## Search and Analysis
+- Precision: percentage of retrieved results that are relevant
+- Recall: percentage of relevant results that were retrieved
+- F1: harmonic mean of precision and recall
 
-DeepTrace is designed to combine several complementary forms of analysis.
+## Project status
 
-### Full-text search
+**Milestones complete:**
 
-Search method names, signatures, namespaces, source bodies, and string literals.
+| # | Milestone | Status |
+|---|---|---|
+| 1 | Source indexing | Complete — assembly discovery, Cecil metadata, SQLite + FTS5, CLI discover/index/search/method/types |
+| 2 | Structural analysis | Complete — callers, callees, type hierarchies, references |
+| 3 | AI investigation | Complete — iterative search, summaries, caller/callee traversal, structured reports |
+| 4 | Runtime evidence | Complete — IRuntimeObserver, SQLite persistence, confidence boosting in reports |
+| 5 | Retrieval improvements | Complete — BM25 scoring, investigation recipes, retrieval evaluation |
 
-### Structural analysis
+**Known limitations:**
 
-Analyze method calls, type hierarchies, constructors, field access, and references using compiled assembly metadata where possible.
+- ILSpy decompiler body extraction is a stub — full body extraction deferred
+- No semantic embeddings — BM25 scoring is lexical only
+- No BepInEx/HarmonyX runtime instrumentation plugin — only in-memory and SQLite observation storage
+- IL2CPP assemblies not supported (managed .NET only)
+- Static call graph incomplete for virtual dispatch, reflection, events, engine callbacks
 
-### Semantic search
+## Test results
 
-Optionally use generated method summaries and embeddings to discover relevant code when the terminology in a request differs from the identifiers used by the game.
-
-### Graph traversal
-
-Follow relationships from candidate entry points to discover dependencies and reconstruct likely execution paths.
-
-Static analysis cannot fully resolve every virtual call, reflection-based invocation, event subscription, dynamically loaded assembly, or engine callback. DeepTrace should preserve these limitations in its results instead of presenting incomplete graphs as definitive execution traces.
-
-## Runtime Integration
-
-An optional development-only BepInEx plugin can extend static analysis with runtime evidence.
-
-Potential capabilities include:
-
-- Recording selected method calls and execution order.
-- Inspecting selected arguments and return values safely.
-- Capturing relevant exceptions and timing information.
-- Correlating observed methods with indexed symbols.
-- Exporting structured logs for AI-assisted investigation.
-
-Instrumentation should be selective and configurable to limit overhead. Runtime evidence must remain distinguishable from statically inferred behavior.
-
-## Project Status
-
-**Planned / early development**
-
-The initial milestone is a working local indexer with searchable methods and retrievable source code.
-
-| Milestone | Scope |
-|---|---|
-| 1. Source indexing | Assembly ingestion, symbol extraction, SQLite storage, and source retrieval |
-| 2. Structural analysis | Call relationships, type hierarchies, and reference searches |
-| 3. AI investigation | Tool interface, iterative search, and evidence-based reports |
-| 4. Runtime integration | Optional BepInEx instrumentation and runtime observations |
-| 5. Retrieval improvements | Semantic search, ranking evaluation, and reusable investigation workflows |
-
-Features should be marked complete only after implementation and verification.
-
-## Design Principles
-
-- **Evidence over assumptions:** never invent symbols, APIs, or execution paths.
-- **Source provenance:** every retrieved fragment should be traceable to its original assembly and symbol.
-- **Incremental indexing:** avoid reprocessing unchanged assemblies unnecessarily.
-- **Local-first operation:** keep basic indexing and search independent of external AI services.
-- **Separation of concerns:** keep indexing, analysis, search, AI orchestration, and runtime integration loosely coupled.
-- **Bounded retrieval:** retrieve relevant code rather than dumping entire projects into an LLM context.
-- **Testability:** validate indexing, graph traversal, and retrieval quality with automated tests.
-- **Minimal implementation:** prefer a useful, working vertical slice over premature infrastructure.
-
-## Getting Started
-
-The setup instructions will be added once the initial CLI and indexing pipeline are implemented.
-
-The intended workflow is:
-
-1. Configure the target game's installation directory.
-2. Discover and index its relevant assemblies.
-3. Search for types and methods.
-4. Retrieve source and inspect code relationships.
-5. Connect an AI assistant to the structured tool interface.
-6. Investigate gameplay features before implementing mods.
+```
+101 tests passed, 0 failed
+```
 
 ## License
 
