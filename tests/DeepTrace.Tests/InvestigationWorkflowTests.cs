@@ -1,6 +1,7 @@
 using DeepTrace.Core.Ai;
 using DeepTrace.Indexing;
 using DeepTrace.Core.Models;
+using TestLib;
 using Xunit;
 
 namespace DeepTrace.Tests;
@@ -19,7 +20,7 @@ public class InvestigationWorkflowTests
 
         var dllPath = Path.Combine(_testDir, "TestLib.dll");
         File.Copy(
-            @"C:\Temp\TestLib\TestLib\bin\Release\net8.0\TestLib.dll",
+            typeof(TestLib.Greeter).Assembly.Location,
             dllPath,
             overwrite: true);
 

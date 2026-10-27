@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\src\DeepTrace.Core\DeepTrace.Core.csproj" />
     <ProjectReference Include="..\..\src\DeepTrace.Decompiler\DeepTrace.Decompiler.csproj" />
     <ProjectReference Include="..\..\src\DeepTrace.Indexing\DeepTrace.Indexing.csproj" />
+    <ProjectReference Include="..\..\test-assets\TestLib\TestLib.csproj" />
   </ItemGroup>
 
 </Project>
