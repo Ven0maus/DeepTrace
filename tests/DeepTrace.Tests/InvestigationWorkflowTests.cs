@@ -14,7 +14,7 @@ public class InvestigationWorkflowTests
 
     public InvestigationWorkflowTests()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_wf_{Guid.NewGuid()}");
+        _testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_wf_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
         _dbPath = Path.Combine(_testDir, "test.db");
 

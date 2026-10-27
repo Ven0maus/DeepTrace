@@ -11,7 +11,7 @@ public class RuntimeObservationPersistenceTests
 
     public RuntimeObservationPersistenceTests()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_rt_{Guid.NewGuid()}");
+        _testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_rt_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
         _dbPath = Path.Combine(_testDir, "test.db");
     }

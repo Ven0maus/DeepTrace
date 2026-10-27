@@ -11,7 +11,7 @@ public class AssemblyDiscoveryTests
 
     public AssemblyDiscoveryTests()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_test_{Guid.NewGuid()}");
+        _testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
         _dbPath = Path.Combine(_testDir, "test.db");
     }

@@ -13,7 +13,7 @@ public class BenchmarkIndexingTests
 
     public BenchmarkIndexingTests(ITestOutputHelper output)
     {
-        _testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_bench_{Guid.NewGuid()}");
+        _testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_bench_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
         _dbPath = Path.Combine(_testDir, "bench.db");
         _output = output;

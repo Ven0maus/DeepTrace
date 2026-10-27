@@ -12,7 +12,7 @@ public class StructuralAnalysisTests
 
     public StructuralAnalysisTests()
     {
-        _testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_struct_{Guid.NewGuid()}");
+        _testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_struct_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testDir);
         _dbPath = Path.Combine(_testDir, "test.db");
     }

@@ -31,7 +31,7 @@ public class CliCommandBenchmarks
     [Fact]
     public void Benchmark_IndexPhaseBreakdown()
     {
-        var testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_phase_{Guid.NewGuid()}");
+        var testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_phase_{Guid.NewGuid()}");
         Directory.CreateDirectory(testDir);
         var dbPath = Path.Combine(testDir, "phase.db");
         var dllSrc = typeof(BenchmarkLib.Data.ProcessRecord0).Assembly.Location;
@@ -126,7 +126,7 @@ public class CliCommandBenchmarks
     [Fact]
     public void Benchmark_Index10xCycles()
     {
-        var testDir = Path.Combine(Path.GetTempPath(), $"deeptrace_10x_{Guid.NewGuid()}");
+        var testDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_10x_{Guid.NewGuid()}");
         Directory.CreateDirectory(testDir);
         var dllSrc = typeof(BenchmarkLib.Data.ProcessRecord0).Assembly.Location;
         var dllPath = Path.Combine(testDir, "BenchmarkLib.dll");
@@ -437,7 +437,7 @@ public class CliCommandBenchmarks
     [Fact]
     public void Benchmark_Evaluate()
     {
-        var evalDir = Path.Combine(Path.GetTempPath(), $"deeptrace_eval_{Guid.NewGuid()}");
+        var evalDir = Path.Combine(AppContext.BaseDirectory, $"deeptrace_eval_{Guid.NewGuid()}");
         Directory.CreateDirectory(evalDir);
         var evalDb = Path.Combine(evalDir, "eval.db");
         var dllSrc = typeof(BenchmarkLib.Data.ProcessRecord0).Assembly.Location;
