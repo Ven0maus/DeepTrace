@@ -24,7 +24,7 @@ public class StructuralAnalysisTests
             typeof(TestLib.Greeter).Assembly.Location,
             dllPath,
             overwrite: true);
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
         indexer.IndexAssembly(assembly);
         return indexer;
@@ -218,3 +218,4 @@ public class StructuralAnalysisTests
         Assert.False(prefix.IsStatic);
     }
 }
+

@@ -19,7 +19,7 @@ public class RuntimeObservationPersistenceTests
     [Fact]
     public void StoreAndGetRuntimeObservation_PersistsAndRetrieves()
     {
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var observation = new RuntimeObservation
         {
             Id = "test_obs_1",
@@ -49,7 +49,7 @@ public class RuntimeObservationPersistenceTests
     [Fact]
     public void StoreMultipleObservations_RetrievedCorrectly()
     {
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
@@ -81,7 +81,7 @@ public class RuntimeObservationPersistenceTests
     [Fact]
     public void GetAllRuntimeObservations_ReturnsAllSymbols()
     {
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
@@ -102,8 +102,9 @@ public class RuntimeObservationPersistenceTests
     [Fact]
     public void GetRuntimeObservations_EmptyDatabase_ReturnsEmpty()
     {
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var obs = indexer.GetRuntimeObservations("nonexistent");
         Assert.Empty(obs);
     }
 }
+

@@ -4,7 +4,7 @@ using DeepTrace.Core.Runtime;
 using DeepTrace.Decompiler;
 using DeepTrace.Indexing;
 
-var indexer = new SqliteIndexer("deeptrace.db", new IlsyDecompiler());
+var indexer = new SqliteIndexer("deeptrace.db", new IlspyDecompiler());
 
 if (args.Length == 0)
 {
@@ -300,7 +300,7 @@ switch (command)
             Directory.CreateDirectory(evalDir);
             var evalDb = Path.Combine(evalDir, "eval.db");
             File.Copy(dllPath, Path.Combine(evalDir, "eval.dll"), overwrite: true);
-            var evalIndexer = new SqliteIndexer(evalDb, new IlsyDecompiler());
+            var evalIndexer = new SqliteIndexer(evalDb, new IlspyDecompiler());
             var assemblies = evalIndexer.DiscoverAssemblies(evalDir);
             foreach (var asm in assemblies)
                 evalIndexer.IndexAssembly(asm);
@@ -335,7 +335,7 @@ switch (command)
     case "stats":
         {
             Console.WriteLine($"Database: deeptrace.db");
-            Console.WriteLine($"Decompiler: IlsyDecompiler (stub — body extraction deferred)");
+            Console.WriteLine($"Decompiler: IlspyDecompiler (stub — body extraction deferred)");
             break;
         }
 
@@ -513,3 +513,4 @@ static void PrintReport(DeepTrace.Core.Models.InvestigationReport report)
     Console.WriteLine("--- Validation Plan ---");
     Console.WriteLine(report.ValidationPlan);
 }
+

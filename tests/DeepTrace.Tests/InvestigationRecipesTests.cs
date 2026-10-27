@@ -23,7 +23,7 @@ public class InvestigationRecipesTests
             dllPath,
             overwrite: true);
 
-        _indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        _indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = _indexer.DiscoverAssemblies(_testDir)[0];
         _indexer.IndexAssembly(assembly);
     }
@@ -113,3 +113,4 @@ public class InvestigationRecipesTests
         Assert.Empty(results);
     }
 }
+

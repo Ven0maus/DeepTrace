@@ -27,7 +27,7 @@ public class IndexingTests
             dllPath,
             overwrite: true);
 
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
 
         // Act
@@ -50,7 +50,7 @@ public class IndexingTests
             dllPath,
             overwrite: true);
 
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
         indexer.IndexAssembly(assembly);
 
@@ -73,7 +73,7 @@ public class IndexingTests
             dllPath,
             overwrite: true);
 
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
 
         // Act — first index
@@ -97,7 +97,7 @@ public class IndexingTests
             dllPath,
             overwrite: true);
 
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
         indexer.IndexAssembly(assembly);
 
@@ -119,7 +119,7 @@ public class IndexingTests
             dllPath,
             overwrite: true);
 
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
         indexer.IndexAssembly(assembly);
 
@@ -140,7 +140,7 @@ public class IndexingTests
     public void GetMethod_ReturnsNullForUnknownId()
     {
         // Arrange
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
 
         // Act
         var method = indexer.GetMethod("nonexistent::symbol");
@@ -159,7 +159,7 @@ public class IndexingTests
             dllPath,
             overwrite: true);
 
-        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlsyDecompiler());
+        var indexer = new SqliteIndexer(_dbPath, new Decompiler.IlspyDecompiler());
         var assembly = indexer.DiscoverAssemblies(_testDir)[0];
         indexer.IndexAssembly(assembly);
 
@@ -170,3 +170,4 @@ public class IndexingTests
         Assert.NotEmpty(results);
     }
 }
+
