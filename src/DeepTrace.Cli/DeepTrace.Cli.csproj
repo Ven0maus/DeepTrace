@@ -6,12 +6,27 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Packaging -->
+    <Version>0.1.0</Version>
+    <PackageId>deeptrace</PackageId>
+    <PackageType>DotnetTool</PackageType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>deeptrace</ToolCommandName>
+    <PackageDescription>Local code intelligence for AI-assisted game mod development. Index decompiled .NET assemblies, search with BM25 + LSA, and run AI-driven investigation workflows.</PackageDescription>
+    <PackageTags>decompiler;modding;game;code-intelligence;bm25;lsa;net;ilspy;monocecil</PackageTags>
+    <PackageProjectUrl>https://github.com/Ven0maus/DeepTrace</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DeepTrace.Core\DeepTrace.Core.csproj" />
     <ProjectReference Include="..\DeepTrace.Decompiler\DeepTrace.Decompiler.csproj" />
     <ProjectReference Include="..\DeepTrace.Indexing\DeepTrace.Indexing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
