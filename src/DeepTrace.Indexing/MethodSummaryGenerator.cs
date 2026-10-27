@@ -6,6 +6,10 @@ using DeepTrace.Core.Models;
 
 namespace DeepTrace.Indexing;
 
+/// <summary>
+/// Generates human-readable summaries of method purpose from metadata and body text.
+/// Uses heuristic analysis of method name, parameters, body content, and lifecycle patterns.
+/// </summary>
 public static class MethodSummaryGenerator
 {
     private const int MaxLength = 120;

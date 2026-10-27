@@ -17,14 +17,23 @@ Target: decompiled .NET assemblies and BepInEx-based mods.
 - Execute pre-defined investigation recipes for common modding tasks
 - Evaluate retrieval quality with precision/recall/F1 metrics
 
-## Example workflow
+## Quick start
 
-```
-deeptrace discover ./GameDirectory
-deeptrace index ./GameDirectory
-deeptrace search "Greeter"
-deeptrace callees "TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String"
-deeptrace investigate "How does the game greet players?"
+```bash
+# Build
+dotnet build DeepTrace.slnx
+
+# Discover managed assemblies
+dotnet run --project src/DeepTrace.Cli -- discover ./GameDirectory
+
+# Index for search
+dotnet run --project src/DeepTrace.Cli -- index ./GameDirectory
+
+# Search
+dotnet run --project src/DeepTrace.Cli -- search "Greeter"
+
+# Investigate
+dotnet run --project src/DeepTrace.Cli -- investigate "How does the game greet players?"
 ```
 
 ## CLI commands
@@ -48,6 +57,8 @@ deeptrace investigate "How does the game greet players?"
 | `evaluate <dllPath>` | Measure retrieval quality |
 | `stats` | Show indexer statistics |
 
+Full CLI reference: [docs/CLI.md](docs/CLI.md)
+
 ## Architecture
 
 ```
@@ -62,7 +73,9 @@ src/
   DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
   DeepTrace.Cli/          CLI entry point with all commands
 tests/
-  DeepTrace.Tests/        xUnit test suite (101 tests)
+  DeepTrace.Tests/        xUnit test suite
+test-assets/
+  TestLib/                Self-contained test assembly
 ```
 
 ## Technology
@@ -104,31 +117,71 @@ The `evaluate` command measures search quality against known-gold-standard resul
 - Recall: percentage of relevant results that were retrieved
 - F1: harmonic mean of precision and recall
 
-## Project status
+## AI integration
 
-**Milestones complete:**
+DeepTrace includes an AI skill for use in agent setups. To configure your project:
 
-| # | Milestone | Status |
-|---|---|---|
-| 1 | Source indexing | Complete — assembly discovery, Cecil metadata, SQLite + FTS5, CLI discover/index/search/method/types |
-| 2 | Structural analysis | Complete — callers, callees, type hierarchies, references |
-| 3 | AI investigation | Complete — iterative search, summaries, caller/callee traversal, structured reports |
-| 4 | Runtime evidence | Complete — IRuntimeObserver, SQLite persistence, confidence boosting in reports |
-| 5 | Retrieval improvements | Complete — BM25 scoring, investigation recipes, retrieval evaluation |
+### Adding the DeepTrace CLI skill to AGENTS.md
 
-**Known limitations:**
+Copy the skill file into your project and reference it in AGENTS.md:
 
-- ILSpy decompiler body extraction is a stub — full body extraction deferred
+```markdown
+## Skills
+
+<skill>
+  <id>deeptrace-cli</id>
+  <name>DeepTrace CLI</name>
+  <description>Use when working with the DeepTrace CLI to index, search, and investigate .NET assemblies for game mod development.</description>
+  <path>skills/deeptrace-cli.md</path>
+</skill>
+```
+
+Or add the skill path to your OpenCode configuration to enable auto-discovery:
+
+```json
+{
+  "skills": {
+    "paths": ["skills/"]
+  }
+}
+```
+
+The skill provides a quick-reference guide for all DeepTrace CLI commands, symbol ID formats, and typical workflows. See [skills/deeptrace-cli.md](skills/deeptrace-cli.md) for the full skill content.
+
+### Using DeepTrace as a library
+
+```csharp
+using DeepTrace.Indexing;
+using DeepTrace.Decompiler;
+using DeepTrace.Core.Ai;
+
+var indexer = new SqliteIndexer("deeptrace.db", new IlspyDecompiler());
+var assemblies = indexer.DiscoverAssemblies("./GameDirectory");
+foreach (var asm in assemblies)
+    indexer.IndexAssembly(asm);
+
+// Search
+var results = indexer.Search("Greeter", limit: 20);
+
+// Investigation
+var tools = new InvestigationTools(indexer);
+var workflow = new InvestigationWorkflow(tools);
+var report = workflow.Investigate("How does the game greet players?");
+```
+
+## Documentation
+
+- [CLI Reference](docs/CLI.md) — all commands with parameters and examples
+- [API Reference](docs/API.md) — public types, interfaces, and methods
+- [AI Skill](skills/deeptrace-cli.md) — quick-reference for agent setups
+
+## Known limitations
+
+- ILSpy decompiler body extraction is fully implemented — no longer a stub
 - No semantic embeddings — BM25 scoring is lexical only
 - No BepInEx/HarmonyX runtime instrumentation plugin — only in-memory and SQLite observation storage
 - IL2CPP assemblies not supported (managed .NET only)
 - Static call graph incomplete for virtual dispatch, reflection, events, engine callbacks
-
-## Test results
-
-```
-101 tests passed, 0 failed
-```
 
 ## License
 

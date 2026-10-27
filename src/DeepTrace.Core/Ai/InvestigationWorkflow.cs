@@ -7,7 +7,8 @@ using DeepTrace.Core.Runtime;
 namespace DeepTrace.Core.Ai;
 
 /// <summary>
-/// Configuration for an investigation run.
+/// Configuration for an AI investigation run.
+/// Controls search depth, result limits, and token budget for the workflow.
 /// </summary>
 public sealed class InvestigationOptions
 {

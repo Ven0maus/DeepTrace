@@ -7,6 +7,10 @@ using DeepTrace.Core.Runtime;
 
 namespace DeepTrace.Indexing;
 
+/// <summary>
+/// SQLite-backed indexer for decompiled .NET assemblies.
+/// Uses FTS5 for full-text search and stores metadata, relationships, and runtime observations.
+/// </summary>
 public sealed class SqliteIndexer : IIndexer, IDisposable
 {
     private readonly string _databasePath;

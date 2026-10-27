@@ -6,6 +6,9 @@ using Mono.Cecil;
 
 namespace DeepTrace.Indexing;
 
+/// <summary>
+/// Discovers managed .NET assemblies in a directory, excluding system and framework assemblies.
+/// </summary>
 public sealed class AssemblyDiscoverer : IAssemblyDiscoverer
 {
     private static readonly HashSet<string> ExcludedAssemblies = new(StringComparer.OrdinalIgnoreCase)
