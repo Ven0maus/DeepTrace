@@ -4,14 +4,6 @@
 
 Local code intelligence system for AI-assisted game mod development. Targets decompiled .NET game assemblies and BepInEx-based mods.
 
-Long-term goal: enable AI to understand game architecture, discover gameplay systems, trace execution paths, implement compatible mod features using evidence from actual game code.
-
-Example use case:
-
-"Create an NPC using the same process the game uses to populate a city."
-
-Discover existing NPC creation and initialization path before proposing implementation.
-
 ## Repository Structure
 
 ```
@@ -35,24 +27,24 @@ skills/
 ## Engineering Principles
 
 1. **Evidence over assumptions.** Never invent game classes, methods, signatures, APIs, or execution paths. Every claim must be traceable to indexed data or runtime observation.
-2. **Inspect before implementing.** Explore repository, dependencies, conventions, architecture before changes. Read existing files first.
-3. **Smallest useful implementation.** Avoid unnecessary abstractions, dependencies, frameworks, distributed infrastructure. Reuse existing patterns.
-4. **Preserve provenance.** Every code fragment and structural relationship traceable to source assembly and symbol. Use stable symbol IDs.
-5. **Distinguish facts from inference.** Label inferred relationships, generated summaries, runtime observations. The investigation workflow already does this via `EvidenceAndConfidence` with `ConfidenceLevel` and `EvidenceSource`.
-6. **Validate changes.** Build and test affected components when environment permits. Run `dotnet test` before claiming completion.
+2. **Inspect before implementing.** Read existing files first. Explore repository, dependencies, conventions, architecture before changes.
+3. **Smallest useful implementation.** Avoid unnecessary abstractions, dependencies, frameworks, distributed infrastructure.
+4. **Preserve provenance.** Every code fragment and structural relationship traceable to source assembly and symbol.
+5. **Distinguish facts from inference.** Label inferred relationships, generated summaries, runtime observations.
+6. **Validate changes.** Build and test affected components. Run `dotnet test` before claiming completion.
 7. **Incremental development.** Complete useful, testable milestones over large speculative architecture.
-8. **Local-first.** Game assemblies, indexes, caches, configuration remain local unless explicit feature requires otherwise.
+8. **Local-first.** Game assemblies, indexes, caches, configuration remain local.
 
 ## Technology Stack
 
-- **C# and .NET** — All projects. Core targets net8.0, CLI targets net10.0.
-- **Mono.Cecil** — Compiled assembly metadata and IL analysis. Read-only access to types, methods, fields, calls.
-- **ILSpy / ICSharpCode.Decompiler** — C# source extraction from assemblies. Type-level and method-level decompilation with brace-counting method extraction.
-- **SQLite + FTS5** — Persistent storage. Full-text search on symbols (name, signature, summary) and methods (name, declaring type, body, summary). Triggers keep FTS5 in sync.
-- **BM25** — Relevance scoring for search results. K1=1.5, B=0.75. Exact name match: +10.0, prefix match: +3.0.
-- **InMemoryRuntimeObserver** — In-memory runtime observation store. Not persisted across process restarts. Stores per-call parameters, return values, duration, depth.
+- **C# / .NET** — Core targets net8.0, CLI targets net10.0.
+- **Mono.Cecil 0.11.6** — assembly metadata extraction.
+- **ICSharpCode.Decompiler 9.0.0.7889** (ILSpy) — source extraction.
+- **Microsoft.Data.Sqlite 10.0.0** — SQLite ORM.
+- **SQLitePCLRaw.bundle_e_sqlite3 3.0.5** — native SQLite bindings.
+- **xUnit 2.9.3** + test SDK.
 
-Do not add a dependency solely because it appears in this list. Check compatibility, maintenance, licensing, real problem solved.
+Check compatibility before adding dependencies.
 
 ## Architecture
 
@@ -81,7 +73,7 @@ Example: `TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String`
 Type: `Assembly::Namespace.Type`
 Example: `TestLib::TestLib.Greeter`
 
-Call graph edges reference the same format. External methods (not in indexed assemblies) use `FullName::MethodName`.
+External methods (not in indexed assemblies) use `FullName::MethodName`.
 
 ### AI Investigation Workflow
 
@@ -171,14 +163,6 @@ dotnet run --project src/DeepTrace.Cli -- [--db <path>] <command> [args...]
 | `evaluate <dllPath>` | Measure retrieval quality (precision/recall/F1). |
 | `stats` | Show indexer statistics. |
 
-### Multi-game Workflow
-
-```bash
-dotnet run -- --db games/unity.db index C:/Games/UnityGame
-dotnet run -- --db games/steamgame.db index C:/Games/SteamGame
-dotnet run -- --db games/unity.db search "NPC"
-```
-
 ## AI Investigation Workflow
 
 When asked to implement gameplay feature, use the investigation workflow:
@@ -197,11 +181,7 @@ When asked to implement gameplay feature, use the investigation workflow:
 5. Follow callers/callees with `callers`/`callees` commands.
 6. Check runtime observations with `runtime <symbolId>`.
 
-Do not choose a method solely because its name resembles the requested feature.
-
-Do not recommend HarmonyX patch before investigating existing API or safer extension point reuse.
-
-If evidence insufficient, perform further targeted searches or explain unresolved questions.
+Do not choose a method solely because its name resembles the requested feature. Do not recommend HarmonyX patch before investigating existing API or safer extension point reuse.
 
 ## Code Quality
 
@@ -212,7 +192,6 @@ If evidence insufficient, perform further targeted searches or explain unresolve
 - Use structured logging for operational diagnostics.
 - Keep configuration explicit and game paths configurable.
 - Use deterministic tests for pure logic.
-- Test game-dependent behavior through integration tests when necessary.
 - Avoid arbitrary execution of decompiled code.
 - Do not silently swallow exceptions or report success on failure.
 
@@ -244,9 +223,37 @@ After changing code:
 4. Report what was implemented and verified.
 5. Explicitly identify remaining limitations and untested behavior.
 
-Do not claim build or test passed unless actually executed successfully.
+Do not claim build or test passed unless actually executed successfully. Do not replace working architecture or rewrite large repository portions without clear technical reason.
 
-Do not replace working architecture or rewrite large repository portions without clear technical reason.
+## Development Harness
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `dotnet build DeepTrace.slnx` | Build all projects (restore + build) |
+| `dotnet test DeepTrace.Tests.csproj` | Run all 196 tests |
+| `dotnet format --verify-no-changes` | Check formatting against `.editorconfig` (IDE guidance only; not enforced in CI) |
+
+### Formatting
+
+- `.editorconfig` defines: 4-space indent, utf-8 charset, trim trailing whitespace, final newline, using directive placement (outside namespace), namespace matching, qualification rules.
+- `dotnet format --verify-no-changes` has known failures on existing code (WHITESPACE from built-in multiline formatter, generated files with UTF-16/CRLF). These are not controllable via `.editorconfig`.
+- `.editorconfig` serves as IDE guidance for new code. Agents should follow its rules.
+
+### CI
+
+- `.github/workflows/ci.yml` runs on push/PR to `main`.
+- Steps: checkout → setup .NET 8/10 → restore → build (Release) → test (Release).
+
+### Architecture Invariants
+
+- `DeepTrace.Core` has no project references (leaf dependency).
+- `DeepTrace.Indexing` depends only on `DeepTrace.Core`.
+- `DeepTrace.Decompiler` depends only on `DeepTrace.Core`.
+- `DeepTrace.Cli` depends on all three above.
+- `DeepTrace.Tests` depends on all production projects.
+- Never add a project reference that violates this dependency graph.
 
 ## Implementation Priorities
 

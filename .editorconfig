@@ -1,0 +1,37 @@
+root = true
+
+# Exclude generated files — they have their own formatting (CRLF/UTF-16 on Windows)
+[BenchmarkLib/Generated/*.cs]
+indent_size = 4
+indent_style = space
+trim_trailing_whitespace = true
+insert_final_newline = true
+charset = utf-16le
+
+# Exclude bin/obj directories
+[**/bin/**]
+[**/obj/**]
+enabled = false
+
+[*.{cs,csx,props,targets}]
+indent_size = 4
+indent_style = space
+trim_trailing_whitespace = true
+insert_final_newline = true
+charset = utf-8
+
+# C# formatting - using directives
+dotnet_style_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+
+# C# formatting - namespace matching
+dotnet_style_namespace_match_namespace = true
+
+# C# formatting - qualification (never preferred, warning on violation)
+dotnet_style_qualification_for_field = never:warning
+dotnet_style_qualification_for_property = never
+dotnet_style_qualification_for_method = never
+dotnet_style_qualification_for_event = never
+
+# C# code style - language version
+dotnet_csharp_version = 12.0

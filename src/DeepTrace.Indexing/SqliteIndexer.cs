@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Security.Cryptography;
-using Microsoft.Data.Sqlite;
-using Mono.Cecil;
 using DeepTrace.Core.Interfaces;
 using DeepTrace.Core.Models;
 using DeepTrace.Core.Runtime;
+using Microsoft.Data.Sqlite;
+using Mono.Cecil;
 
 namespace DeepTrace.Indexing;
 
@@ -83,94 +83,94 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-        var types = new List<TypeInfo>();
-        var symCmd = conn.Cmd(@"SELECT id, full_name, namespace, name, base_type
+            var types = new List<TypeInfo>();
+            var symCmd = conn.Cmd(@"SELECT id, full_name, namespace, name, base_type
                 FROM symbols WHERE assembly = @assembly AND kind = 'Type'")
-            .P("@assembly", assemblyName);
-        using var symReader = symCmd.ExecuteReader();
+                .P("@assembly", assemblyName);
+            using var symReader = symCmd.ExecuteReader();
 
-        while (symReader.Read())
-        {
-            var typeId = symReader.GetString(0);
-            var fullName = symReader.GetString(1);
-            var ns = symReader.GetString(2);
-            var name = symReader.GetString(3);
-            var baseType = symReader.IsDBNull(4) ? null : symReader.GetString(4);
-
-            var type = new TypeInfo
+            while (symReader.Read())
             {
-                SymbolId = typeId,
-                FullName = fullName,
-                Namespace = ns,
-                Name = name,
-                BaseTypeFullName = baseType,
-                AssemblyName = assemblyName,
-            };
+                var typeId = symReader.GetString(0);
+                var fullName = symReader.GetString(1);
+                var ns = symReader.GetString(2);
+                var name = symReader.GetString(3);
+                var baseType = symReader.IsDBNull(4) ? null : symReader.GetString(4);
 
-            // Inline ReadStrings for interfaces
-            var ifaceCmd = conn.Cmd("SELECT interface_name FROM type_interfaces WHERE type_id = @id")
-                .P("@id", typeId);
-            using var ifaceReader = ifaceCmd.ExecuteReader();
-            var ifaceList = new List<string>();
-            while (ifaceReader.Read())
-                ifaceList.Add(ifaceReader.GetString(0));
-            type.Interfaces = [.. ifaceList];
+                var type = new TypeInfo
+                {
+                    SymbolId = typeId,
+                    FullName = fullName,
+                    Namespace = ns,
+                    Name = name,
+                    BaseTypeFullName = baseType,
+                    AssemblyName = assemblyName,
+                };
 
-            // Inline ReadMethods
-            var methodCmd = conn.Cmd(@"SELECT m.symbol_id, s.signature, m.is_static, m.is_virtual, m.is_abstract, m.is_override
+                // Inline ReadStrings for interfaces
+                var ifaceCmd = conn.Cmd("SELECT interface_name FROM type_interfaces WHERE type_id = @id")
+                    .P("@id", typeId);
+                using var ifaceReader = ifaceCmd.ExecuteReader();
+                var ifaceList = new List<string>();
+                while (ifaceReader.Read())
+                    ifaceList.Add(ifaceReader.GetString(0));
+                type.Interfaces = [.. ifaceList];
+
+                // Inline ReadMethods
+                var methodCmd = conn.Cmd(@"SELECT m.symbol_id, s.signature, m.is_static, m.is_virtual, m.is_abstract, m.is_override
                     FROM methods m JOIN symbols s ON m.symbol_id = s.id
                     WHERE m.symbol_id LIKE @prefix")
-                .P("@prefix", $"{assemblyName}::{fullName}::%");
-            using var methodReader = methodCmd.ExecuteReader();
-            var methodList = new List<MethodInfo>();
-            while (methodReader.Read())
-            {
-                var id = methodReader.GetString(0);
-                var assembly = id.Split("::")[0];
-                methodList.Add(new MethodInfo
+                    .P("@prefix", $"{assemblyName}::{fullName}::%");
+                using var methodReader = methodCmd.ExecuteReader();
+                var methodList = new List<MethodInfo>();
+                while (methodReader.Read())
                 {
-                    SymbolId = id,
-                    Signature = methodReader.GetString(1),
-                    DeclaringTypeFullName = fullName,
-                    AssemblyName = assembly,
-                    IsStatic = methodReader.GetInt32(2) == 1,
-                    IsVirtual = methodReader.GetInt32(3) == 1,
-                    IsAbstract = methodReader.GetInt32(4) == 1,
-                    IsOverride = methodReader.GetInt32(5) == 1,
-                });
-            }
-            type.Methods = [.. methodList];
+                    var id = methodReader.GetString(0);
+                    var assembly = id.Split("::")[0];
+                    methodList.Add(new MethodInfo
+                    {
+                        SymbolId = id,
+                        Signature = methodReader.GetString(1),
+                        DeclaringTypeFullName = fullName,
+                        AssemblyName = assembly,
+                        IsStatic = methodReader.GetInt32(2) == 1,
+                        IsVirtual = methodReader.GetInt32(3) == 1,
+                        IsAbstract = methodReader.GetInt32(4) == 1,
+                        IsOverride = methodReader.GetInt32(5) == 1,
+                    });
+                }
+                type.Methods = [.. methodList];
 
-            // Inline ReadFields
-            var fieldCmd = conn.Cmd(@"SELECT id, type, is_static, is_literal
+                // Inline ReadFields
+                var fieldCmd = conn.Cmd(@"SELECT id, type, is_static, is_literal
                     FROM fields WHERE symbol_id LIKE @prefix")
-                .P("@prefix", $"{typeId}::%");
-            using var fieldReader = fieldCmd.ExecuteReader();
-            var fieldList = new List<FieldInfo>();
-            while (fieldReader.Read())
-            {
-                var id = fieldReader.GetString(0);
-                var parts = id.Split("::");
-                var fieldName = parts.Length > 2 ? parts[2] : id;
-                var fieldAssembly = parts.Length > 0 ? parts[0] : string.Empty;
-                fieldList.Add(new FieldInfo
+                    .P("@prefix", $"{typeId}::%");
+                using var fieldReader = fieldCmd.ExecuteReader();
+                var fieldList = new List<FieldInfo>();
+                while (fieldReader.Read())
                 {
-                    SymbolId = id,
-                    FullName = $"{fullName}.{fieldName}",
-                    DeclaringTypeFullName = fullName,
-                    Name = fieldName,
-                    Type = fieldReader.GetString(1),
-                    AssemblyName = fieldAssembly,
-                    IsStatic = fieldReader.GetInt32(2) == 1,
-                    IsLiteral = fieldReader.GetInt32(3) == 1,
-                });
+                    var id = fieldReader.GetString(0);
+                    var parts = id.Split("::");
+                    var fieldName = parts.Length > 2 ? parts[2] : id;
+                    var fieldAssembly = parts.Length > 0 ? parts[0] : string.Empty;
+                    fieldList.Add(new FieldInfo
+                    {
+                        SymbolId = id,
+                        FullName = $"{fullName}.{fieldName}",
+                        DeclaringTypeFullName = fullName,
+                        Name = fieldName,
+                        Type = fieldReader.GetString(1),
+                        AssemblyName = fieldAssembly,
+                        IsStatic = fieldReader.GetInt32(2) == 1,
+                        IsLiteral = fieldReader.GetInt32(3) == 1,
+                    });
+                }
+                type.Fields = [.. fieldList];
+
+                types.Add(type);
             }
-            type.Fields = [.. fieldList];
 
-            types.Add(type);
-        }
-
-        return [.. types];
+            return [.. types];
         }
     }
 
@@ -181,7 +181,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-        var methodCmd = conn.Cmd(@"SELECT s.full_name, s.signature, s.summary, m.declaring_type, m.body,
+            var methodCmd = conn.Cmd(@"SELECT s.full_name, s.signature, s.summary, m.declaring_type, m.body,
                 m.source_file, m.start_line, m.start_column, m.end_line, m.end_column,
                 m.is_static, m.is_virtual, m.is_abstract, m.is_override,
                 s2.name AS assembly_name
@@ -189,53 +189,53 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 JOIN symbols s ON m.symbol_id = s.id
                 JOIN assemblies s2 ON s.assembly = s2.name
                 WHERE m.symbol_id = @id")
-            .P("@id", symbolId);
-        using var reader = methodCmd.ExecuteReader();
+                .P("@id", symbolId);
+            using var reader = methodCmd.ExecuteReader();
 
-        if (!reader.Read())
-            return null;
+            if (!reader.Read())
+                return null;
 
-        var method = new MethodInfo
-        {
-            SymbolId = symbolId,
-            FullName = reader.GetString(0),
-            Signature = reader.GetString(1),
-            Summary = reader.IsDBNull(2) ? null : reader.GetString(2),
-            DeclaringTypeFullName = reader.GetString(3),
-            Body = reader.IsDBNull(4) ? null : reader.GetString(4),
-            SourceLocation = reader.IsDBNull(5) ? null : new SourceLocation(
-                reader.GetString(5),
-                reader.GetInt32(6),
-                reader.GetInt32(7),
-                reader.IsDBNull(8) ? (int?)null : reader.GetInt32(8),
-                reader.IsDBNull(9) ? (int?)null : reader.GetInt32(9)
-            ),
-            IsStatic = reader.GetInt32(10) == 1,
-            IsVirtual = reader.GetInt32(11) == 1,
-            IsAbstract = reader.GetInt32(12) == 1,
-            IsOverride = reader.GetInt32(13) == 1,
-            AssemblyName = reader.GetString(14),
-        };
+            var method = new MethodInfo
+            {
+                SymbolId = symbolId,
+                FullName = reader.GetString(0),
+                Signature = reader.GetString(1),
+                Summary = reader.IsDBNull(2) ? null : reader.GetString(2),
+                DeclaringTypeFullName = reader.GetString(3),
+                Body = reader.IsDBNull(4) ? null : reader.GetString(4),
+                SourceLocation = reader.IsDBNull(5) ? null : new SourceLocation(
+                    reader.GetString(5),
+                    reader.GetInt32(6),
+                    reader.GetInt32(7),
+                    reader.IsDBNull(8) ? (int?)null : reader.GetInt32(8),
+                    reader.IsDBNull(9) ? (int?)null : reader.GetInt32(9)
+                ),
+                IsStatic = reader.GetInt32(10) == 1,
+                IsVirtual = reader.GetInt32(11) == 1,
+                IsAbstract = reader.GetInt32(12) == 1,
+                IsOverride = reader.GetInt32(13) == 1,
+                AssemblyName = reader.GetString(14),
+            };
 
-        // Inline ReadStrings for attributes
-        var attrCmd = conn.Cmd("SELECT attribute FROM method_attributes WHERE method_id = @id")
-            .P("@id", symbolId);
-        using var attrReader = attrCmd.ExecuteReader();
-        var attrList = new List<string>();
-        while (attrReader.Read())
-            attrList.Add(attrReader.GetString(0));
-        method.Attributes = [.. attrList];
+            // Inline ReadStrings for attributes
+            var attrCmd = conn.Cmd("SELECT attribute FROM method_attributes WHERE method_id = @id")
+                .P("@id", symbolId);
+            using var attrReader = attrCmd.ExecuteReader();
+            var attrList = new List<string>();
+            while (attrReader.Read())
+                attrList.Add(attrReader.GetString(0));
+            method.Attributes = [.. attrList];
 
-        var paramList = new List<string>();
-        var paramCmd = conn.Cmd(@"SELECT param_name, param_type FROM method_parameters
+            var paramList = new List<string>();
+            var paramCmd = conn.Cmd(@"SELECT param_name, param_type FROM method_parameters
                 WHERE method_id = @id ORDER BY param_index")
-            .P("@id", symbolId);
-        using var paramReader = paramCmd.ExecuteReader();
-        while (paramReader.Read())
-            paramList.Add($"{paramReader.GetString(1)} {paramReader.GetString(0)}");
-        method.Parameters = paramList;
+                .P("@id", symbolId);
+            using var paramReader = paramCmd.ExecuteReader();
+            while (paramReader.Read())
+                paramList.Add($"{paramReader.GetString(1)} {paramReader.GetString(0)}");
+            method.Parameters = paramList;
 
-        return method;
+            return method;
         }
     }
 
@@ -246,34 +246,34 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-        var methods = new List<MethodInfo>();
-        var cmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.name, s.signature, s.summary, m.declaring_type,
+            var methods = new List<MethodInfo>();
+            var cmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.name, s.signature, s.summary, m.declaring_type,
                 m.is_static, m.is_virtual, m.is_abstract, m.is_override
                 FROM methods m
                 JOIN symbols s ON m.symbol_id = s.id
                 WHERE s.assembly = @assembly AND s.kind = 'Method'")
-            .P("@assembly", assemblyName);
-        using var reader = cmd.ExecuteReader();
+                .P("@assembly", assemblyName);
+            using var reader = cmd.ExecuteReader();
 
-        while (reader.Read())
-        {
-            methods.Add(new MethodInfo
+            while (reader.Read())
             {
-                SymbolId = reader.GetString(0),
-                FullName = reader.GetString(1),
-                Name = reader.GetString(2),
-                Signature = reader.GetString(3),
-                Summary = reader.IsDBNull(4) ? null : reader.GetString(4),
-                DeclaringTypeFullName = reader.GetString(5),
-                AssemblyName = assemblyName,
-                IsStatic = reader.GetInt32(6) == 1,
-                IsVirtual = reader.GetInt32(7) == 1,
-                IsAbstract = reader.GetInt32(8) == 1,
-                IsOverride = reader.GetInt32(9) == 1,
-            });
-        }
+                methods.Add(new MethodInfo
+                {
+                    SymbolId = reader.GetString(0),
+                    FullName = reader.GetString(1),
+                    Name = reader.GetString(2),
+                    Signature = reader.GetString(3),
+                    Summary = reader.IsDBNull(4) ? null : reader.GetString(4),
+                    DeclaringTypeFullName = reader.GetString(5),
+                    AssemblyName = assemblyName,
+                    IsStatic = reader.GetInt32(6) == 1,
+                    IsVirtual = reader.GetInt32(7) == 1,
+                    IsAbstract = reader.GetInt32(8) == 1,
+                    IsOverride = reader.GetInt32(9) == 1,
+                });
+            }
 
-        return [.. methods];
+            return [.. methods];
         }
     }
 
@@ -284,9 +284,9 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-        var results = new List<SearchResult>();
+            var results = new List<SearchResult>();
 
-        var symCmd = conn.Cmd(@"SELECT s.id, s.full_name, s.name, s.kind, s.signature,
+            var symCmd = conn.Cmd(@"SELECT s.id, s.full_name, s.name, s.kind, s.signature,
                 s2.name AS assembly
                 FROM symbols s
                 JOIN assemblies s2 ON s.assembly = s2.name
@@ -297,58 +297,58 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 )
                 ORDER BY CASE WHEN s.name = @exactName THEN 0 ELSE 1 END, s.full_name
                 LIMIT @limit")
-            .P("@query", query)
-            .P("@exactName", query)
-            .P("@limit", limit);
-        using var symReader = symCmd.ExecuteReader();
+                .P("@query", query)
+                .P("@exactName", query)
+                .P("@limit", limit);
+            using var symReader = symCmd.ExecuteReader();
 
-        while (symReader.Read())
-        {
-            var sr = new SearchResult
+            while (symReader.Read())
             {
-                SymbolId = symReader.GetString(0),
-                Name = symReader.GetString(2),
-                Kind = Enum.Parse<SymbolKind>(symReader.GetString(3)),
-                FullyQualifiedName = symReader.GetString(1),
-                Signature = symReader.IsDBNull(4) ? null : symReader.GetString(4),
-                Assembly = symReader.GetString(5),
-            };
-            sr.RelevanceScore = Bm25Scorer.Score(sr, query);
-            results.Add(sr);
-        }
+                var sr = new SearchResult
+                {
+                    SymbolId = symReader.GetString(0),
+                    Name = symReader.GetString(2),
+                    Kind = Enum.Parse<SymbolKind>(symReader.GetString(3)),
+                    FullyQualifiedName = symReader.GetString(1),
+                    Signature = symReader.IsDBNull(4) ? null : symReader.GetString(4),
+                    Assembly = symReader.GetString(5),
+                };
+                sr.RelevanceScore = Bm25Scorer.Score(sr, query);
+                results.Add(sr);
+            }
 
-        var methCmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.name, s2.name AS assembly, m.body
+            var methCmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.name, s2.name AS assembly, m.body
                 FROM methods m
                 JOIN symbols s ON m.symbol_id = s.id
                 JOIN assemblies s2 ON s.assembly = s2.name
                 WHERE m.body LIKE '%' || @query || '%'
                 LIMIT @limit")
-            .P("@query", query)
-            .P("@limit", limit);
-        using var methReader = methCmd.ExecuteReader();
+                .P("@query", query)
+                .P("@limit", limit);
+            using var methReader = methCmd.ExecuteReader();
 
-        var seenIds = results.Select(r => r.SymbolId).ToHashSet();
-        while (methReader.Read())
-        {
-            var symbolId = methReader.GetString(0);
-            if (!seenIds.Add(symbolId))
-                continue;
-
-            var sr = new SearchResult
+            var seenIds = results.Select(r => r.SymbolId).ToHashSet();
+            while (methReader.Read())
             {
-                SymbolId = symbolId,
-                Name = methReader.GetString(2),
-                Kind = SymbolKind.Method,
-                FullyQualifiedName = methReader.GetString(1),
-                Assembly = methReader.GetString(3),
-                Excerpt = GetExcerpt(methReader.GetString(4)),
-            };
-            sr.RelevanceScore = Bm25Scorer.Score(sr, query);
-            results.Add(sr);
-        }
+                var symbolId = methReader.GetString(0);
+                if (!seenIds.Add(symbolId))
+                    continue;
 
-        results.Sort((a, b) => b.RelevanceScore.CompareTo(a.RelevanceScore));
-        return [.. results.Take(limit)];
+                var sr = new SearchResult
+                {
+                    SymbolId = symbolId,
+                    Name = methReader.GetString(2),
+                    Kind = SymbolKind.Method,
+                    FullyQualifiedName = methReader.GetString(1),
+                    Assembly = methReader.GetString(3),
+                    Excerpt = GetExcerpt(methReader.GetString(4)),
+                };
+                sr.RelevanceScore = Bm25Scorer.Score(sr, query);
+                results.Add(sr);
+            }
+
+            results.Sort((a, b) => b.RelevanceScore.CompareTo(a.RelevanceScore));
+            return [.. results.Take(limit)];
         }
     }
 
@@ -713,8 +713,8 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-        return (long)(conn.Cmd("SELECT COUNT(*) FROM assemblies WHERE name = @name")
-            .P("@name", assemblyName).ExecuteScalar() ?? 0L) > 0;
+            return (long)(conn.Cmd("SELECT COUNT(*) FROM assemblies WHERE name = @name")
+                .P("@name", assemblyName).ExecuteScalar() ?? 0L) > 0;
         }
     }
 

@@ -1,6 +1,6 @@
 using DeepTrace.Core.Ai;
-using DeepTrace.Indexing;
 using DeepTrace.Core.Models;
+using DeepTrace.Indexing;
 using TestLib;
 using Xunit;
 

@@ -186,7 +186,7 @@ A single edge in the enriched call graph.
 | `CalleeId` | `string` | Symbol ID of the called method. |
 | `EdgeType` | `string` | Type of call: `direct`, `virtual`, `delegate`, `event_subscription`, `event_unsubscription`. |
 
-#### `FieldInfo`
+#### `PropertyInfo`
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -197,7 +197,6 @@ A single edge in the enriched call graph.
 | `Type` | `string` | Property type name. |
 | `AssemblyName` | `string` | Assembly name. |
 | `IsStatic` | `bool` | Whether the property is static. |
-| `IsVirtual` | `bool` | Whether the property is virtual. |
 
 #### `SourceLocation` (record)
 

@@ -63,6 +63,9 @@ dotnet run --project src/DeepTrace.Cli -- --db games/unity.db search "NPC"
 | `callers <methodSymbolId>` | Find callers of a method |
 | `callees <methodSymbolId>` | Find callees of a method |
 | `references <symbolId>` | Find all references to a symbol |
+| `call-graph <methodId>` | Show enriched call graph edges |
+| `engine-callbacks <typeId>` | Show detected Unity/Unreal callbacks |
+| `interface-implementations <iface> <method>` | Show concrete implementations |
 | `investigate <question>` | Run AI investigation workflow |
 | `observe <symbolId> <durationMs>` | Record a runtime observation |
 | `runtime <symbolId>` | Show runtime observations |
@@ -80,27 +83,27 @@ Full CLI reference: [docs/CLI.md](docs/CLI.md)
 src/
   DeepTrace.Core/         Domain models and interfaces
     Models/               MethodInfo, TypeInfo, SearchResult, InvestigationReport, etc.
-    Interfaces/           IIndexer, IAssemblyDiscoverer, IDecompiler
+    Interfaces/           IIndexer, IAssemblyDiscoverer, IDecompiler, IRuntimeObserver
     Ai/                   InvestigationWorkflow, InvestigationTools, InvestigationRecipes
     Retrieval/            RetrievalEvaluator (precision/recall/F1)
-    Runtime/              RuntimeObservation, IRuntimeObserver, InMemoryRuntimeObserver
+    Runtime/              RuntimeObservation, InMemoryRuntimeObserver
   DeepTrace.Decompiler/   ILSpy-based decompiler wrapper
   DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
   DeepTrace.Cli/          CLI entry point with all commands
 tests/
-  DeepTrace.Tests/        xUnit test suite
-test-assets/
+  DeepTrace.Tests/        xUnit test suite (196 tests)
   TestLib/                Self-contained test assembly
+  BenchmarkLib/           Benchmark test fixtures
 ```
 
 ## Technology
 
 - C# / .NET 8 (core libraries), .NET 10 (CLI)
 - Mono.Cecil 0.11.6 — assembly metadata extraction
-- ILSpy / ICSharpCode.Decompiler — source body extraction
-- SQLite / FTS5 — local persistence and full-text search
-- SQLitePCLRaw 3.0.5 — native SQLite bindings (SQLite 3.53.4)
-- xUnit — test framework
+- ICSharpCode.Decompiler 9.0.0.7889 (ILSpy) — source body extraction
+- Microsoft.Data.Sqlite 10.0.0 — SQLite ORM
+- SQLitePCLRaw.bundle_e_sqlite3 3.0.5 — native SQLite bindings
+- xUnit 2.9.3 — test framework
 
 ## Investigation recipes
 
@@ -195,6 +198,8 @@ var report = workflow.Investigate("How does the game greet players?");
 - No semantic embeddings — BM25 scoring is lexical only
 - IL2CPP assemblies not supported (managed .NET only)
 - Static call graph does not cover reflection — use runtime observations for reflection-based calls
+- Decompiler extracts method bodies by brace-counting from type source
+- Runtime observer is in-memory only (no persistent instrumentation)
 
 ## License
 

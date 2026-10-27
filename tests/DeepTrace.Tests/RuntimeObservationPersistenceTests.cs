@@ -53,20 +53,35 @@ public class RuntimeObservationPersistenceTests
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
-            Id = "obs_1", SymbolId = "sym_1", FullyQualifiedName = "A.Method",
-            Assembly = "TestAssembly", Timestamp = 1, Depth = 0, DurationMs = 10,
+            Id = "obs_1",
+            SymbolId = "sym_1",
+            FullyQualifiedName = "A.Method",
+            Assembly = "TestAssembly",
+            Timestamp = 1,
+            Depth = 0,
+            DurationMs = 10,
         });
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
-            Id = "obs_2", SymbolId = "sym_1", FullyQualifiedName = "A.Method",
-            Assembly = "TestAssembly", Timestamp = 2, Depth = 1, DurationMs = 20,
+            Id = "obs_2",
+            SymbolId = "sym_1",
+            FullyQualifiedName = "A.Method",
+            Assembly = "TestAssembly",
+            Timestamp = 2,
+            Depth = 1,
+            DurationMs = 20,
         });
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
-            Id = "obs_3", SymbolId = "sym_2", FullyQualifiedName = "B.Method",
-            Assembly = "TestAssembly", Timestamp = 3, Depth = 0, DurationMs = 30,
+            Id = "obs_3",
+            SymbolId = "sym_2",
+            FullyQualifiedName = "B.Method",
+            Assembly = "TestAssembly",
+            Timestamp = 3,
+            Depth = 0,
+            DurationMs = 30,
         });
 
         var sym1Obs = indexer.GetRuntimeObservations("sym_1");
@@ -85,14 +100,22 @@ public class RuntimeObservationPersistenceTests
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
-            Id = "obs_a", SymbolId = "sym_a", FullyQualifiedName = "A.Method",
-            Assembly = "A", Timestamp = 1, DurationMs = 5,
+            Id = "obs_a",
+            SymbolId = "sym_a",
+            FullyQualifiedName = "A.Method",
+            Assembly = "A",
+            Timestamp = 1,
+            DurationMs = 5,
         });
 
         indexer.StoreRuntimeObservation(new RuntimeObservation
         {
-            Id = "obs_b", SymbolId = "sym_b", FullyQualifiedName = "B.Method",
-            Assembly = "B", Timestamp = 2, DurationMs = 10,
+            Id = "obs_b",
+            SymbolId = "sym_b",
+            FullyQualifiedName = "B.Method",
+            Assembly = "B",
+            Timestamp = 2,
+            DurationMs = 10,
         });
 
         var all = indexer.GetAllRuntimeObservations();

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using DeepTrace.Indexing;
 using DeepTrace.Core.Models;
+using DeepTrace.Indexing;
 using Xunit;
 
 namespace DeepTrace.Tests;
