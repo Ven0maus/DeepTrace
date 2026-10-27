@@ -13,7 +13,7 @@ Target: decompiled .NET assemblies and BepInEx-based mods.
 - Rank results with BM25-inspired relevance scoring
 - Analyze structural relationships: callers, callees, type hierarchies, references
 - Run AI investigation workflows with iterative search, caller/callee traversal, and evidence-based reports
-- Record and query runtime observations (via SQLite or in-memory store)
+- Record and query runtime observations (via SQLite — single `observe` or bulk `import-observations`)
 - Execute pre-defined investigation recipes for common modding tasks
 - Evaluate retrieval quality with precision/recall/F1 metrics
 
@@ -67,7 +67,8 @@ dotnet run --project src/DeepTrace.Cli -- --db games/unity.db search "NPC"
 | `engine-callbacks <typeId>` | Show detected Unity/Unreal callbacks |
 | `interface-implementations <iface> <method>` | Show concrete implementations |
 | `investigate <question>` | Run AI investigation workflow |
-| `observe <symbolId> <durationMs>` | Record a runtime observation |
+| `observe <symbolId> <durationMs> [params] [return]` | Record a single runtime observation |
+| `import-observations <filePath>` | Bulk import runtime observations from a JSON file |
 | `runtime <symbolId>` | Show runtime observations |
 | `recipes [name]` | List or execute investigation recipes |
 | `evaluate <dllPath>` | Measure retrieval quality |
@@ -91,7 +92,7 @@ src/
   DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
   DeepTrace.Cli/          CLI entry point with all commands
 tests/
-  DeepTrace.Tests/        xUnit test suite (196 tests)
+  DeepTrace.Tests/        xUnit test suite (198 tests)
   TestLib/                Self-contained test assembly
   BenchmarkLib/           Benchmark test fixtures
 ```
@@ -199,7 +200,7 @@ var report = workflow.Investigate("How does the game greet players?");
 - IL2CPP assemblies not supported (managed .NET only)
 - Static call graph does not cover reflection — use runtime observations for reflection-based calls
 - Decompiler extracts method bodies by brace-counting from type source
-- Runtime observer is in-memory only (no persistent instrumentation)
+- Runtime observations persist via `observe` or `import-observations`; no persistent instrumentation (BepInEx/HarmonyX hooks not implemented)
 
 ## License
 

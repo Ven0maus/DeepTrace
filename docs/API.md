@@ -31,7 +31,8 @@ Primary interface for indexing and querying decompiled .NET assemblies.
 | `IsAssemblyIndexed(string assemblyName)` | `bool` | Check whether an assembly has been indexed. |
 | `GetAssemblyLastWriteTime(string assemblyPath)` | `long` | Get last write time as .NET ticks. |
 | `GetAssemblyHash(string assemblyPath)` | `string` | Compute SHA256 hash of an assembly file. |
-| `StoreRuntimeObservation(RuntimeObservation)` | `void` | Store a runtime observation correlated with an indexed symbol. |
+| `StoreRuntimeObservation(RuntimeObservation)` | `void` | Store a single runtime observation correlated with an indexed symbol. |
+| `ImportRuntimeObservations(string filePath, out int count)` | `void` | Bulk import runtime observations from a JSON file. Returns count of imported observations. |
 | `GetRuntimeObservations(string symbolId)` | `IReadOnlyList<RuntimeObservation>` | Get runtime observations for a specific symbol. |
 | `GetAllRuntimeObservations()` | `IReadOnlyList<RuntimeObservation>` | Get all stored runtime observations. |
 
