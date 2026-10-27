@@ -14,6 +14,8 @@ Primary interface for indexing and querying decompiled .NET assemblies.
 |--------|-------------|-------------|
 | `IndexAssembly(AssemblyInfo)` | `void` | Index a single assembly — extracts metadata, types, methods, fields, and relationships. |
 | `IndexAssemblyAsync(AssemblyInfo, CancellationToken)` | `void` | Async version with cancellation support. |
+| `IndexAssemblies(IReadOnlyList<AssemblyInfo>)` | `void` | Index multiple assemblies in a single batch using shared connection and transaction. |
+| `RebuildLsaEmbeddings()` | `void` | Rebuild LSA embeddings from all indexed method bodies. Call once after all assemblies are indexed. |
 | `GetTypes(string assemblyName)` | `IReadOnlyList<TypeInfo>` | List all types in an assembly. |
 | `GetTypeInfo(string assemblyName, string typeFullName)` | `TypeInfo?` | Get detailed type info including methods, fields, properties, and relationships. |
 | `GetMethod(string symbolId)` | `MethodInfo?` | Get full method details by symbol ID. |

@@ -65,11 +65,12 @@ For each discovered assembly:
 1. Checks if already indexed and unchanged (by hash)
 2. Skips unchanged assemblies
 3. Extracts metadata using Mono.Cecil (types, methods, fields, properties)
-4. Decom piles bodies using ILSpy
+4. Decompiles method bodies using ILSpy
 5. Builds FTS5 full-text index
 6. Records type relationships (inheritance, interfaces, callers, callees)
+7. Rebuilds LSA semantic embeddings once after all assemblies
 
-Output shows indexed and skipped assemblies.
+Assemblies are batched into a single transaction for better throughput. Output shows indexed and skipped assemblies with timing.
 
 ### `search`
 

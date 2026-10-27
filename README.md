@@ -92,7 +92,7 @@ src/
   DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
   DeepTrace.Cli/          CLI entry point with all commands
 tests/
-  DeepTrace.Tests/        xUnit test suite (214 tests)
+  DeepTrace.Tests/        xUnit test suite (249 tests)
   TestLib/                Self-contained test assembly
   BenchmarkLib/           Benchmark test fixtures
 ```
@@ -176,8 +176,12 @@ using DeepTrace.Core.Ai;
 
 var indexer = new SqliteIndexer("deeptrace.db", new IlspyDecompiler());
 var assemblies = indexer.DiscoverAssemblies("./GameDirectory");
-foreach (var asm in assemblies)
-    indexer.IndexAssembly(asm);
+
+// Batch index all assemblies (single connection + transaction)
+indexer.IndexAssemblies(assemblies);
+
+// Rebuild LSA embeddings once after all assemblies indexed
+indexer.RebuildLsaEmbeddings();
 
 // Search
 var results = indexer.Search("Greeter", limit: 20);
