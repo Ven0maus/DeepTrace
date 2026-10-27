@@ -23,6 +23,12 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         _databasePath = databasePath;
         _decompiler = decompiler;
         _discoverer = new AssemblyDiscoverer();
+
+        // Create parent directories if they don't exist
+        var parentDir = Path.GetDirectoryName(_databasePath);
+        if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+            Directory.CreateDirectory(parentDir);
+
         InitializeDatabase();
     }
 

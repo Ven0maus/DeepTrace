@@ -4,11 +4,28 @@ using DeepTrace.Core.Runtime;
 using DeepTrace.Decompiler;
 using DeepTrace.Indexing;
 
-var indexer = new SqliteIndexer("deeptrace.db", new IlspyDecompiler());
+// Parse --db flag (default: deeptrace.db)
+string dbPath = "deeptrace.db";
+var filteredArgs = new List<string>();
+for (int i = 0; i < args.Length; i++)
+{
+    if (args[i] == "--db" && i + 1 < args.Length)
+    {
+        dbPath = args[i + 1];
+        i++; // skip the path argument
+    }
+    else
+    {
+        filteredArgs.Add(args[i]);
+    }
+}
+args = filteredArgs.ToArray();
+
+var indexer = new SqliteIndexer(dbPath, new IlspyDecompiler());
 
 if (args.Length == 0)
 {
-    PrintUsage();
+    PrintUsage(dbPath);
     return;
 }
 
@@ -20,7 +37,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace discover <directory>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] discover <directory>");
                 return;
             }
             var assemblies = indexer.DiscoverAssemblies(args[1]);
@@ -34,7 +51,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace index <directory>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] index <directory>");
                 return;
             }
             var assemblies = indexer.DiscoverAssemblies(args[1]);
@@ -62,7 +79,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace search <query> [limit]");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] search <query> [limit]");
                 return;
             }
             var query = args[1];
@@ -78,7 +95,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace methods <assemblyName>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] methods <assemblyName>");
                 return;
             }
             var methods = indexer.GetMethods(args[1]);
@@ -92,7 +109,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace method <symbolId>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] method <symbolId>");
                 return;
             }
             var method = indexer.GetMethod(args[1]);
@@ -109,7 +126,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace types <assemblyName>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] types <assemblyName>");
                 return;
             }
             var types = indexer.GetTypes(args[1]);
@@ -123,7 +140,7 @@ switch (command)
         {
             if (args.Length < 3)
             {
-                Console.Error.WriteLine("Usage: deeptrace type <assemblyName> <typeFullName>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] type <assemblyName> <typeFullName>");
                 return;
             }
             var type = indexer.GetTypeInfo(args[1], args[2]);
@@ -140,7 +157,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace callers <methodSymbolId>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] callers <methodSymbolId>");
                 return;
             }
             var callers = indexer.GetCallers(args[1]);
@@ -154,7 +171,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace callees <methodSymbolId>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] callees <methodSymbolId>");
                 return;
             }
             var callees = indexer.GetCallees(args[1]);
@@ -168,7 +185,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace references <symbolId>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] references <symbolId>");
                 return;
             }
             var results = indexer.SearchReferences(args[1]);
@@ -182,7 +199,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace investigate <question>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] investigate <question>");
                 return;
             }
             var runtimeObserver = new DeepTrace.Core.Runtime.InMemoryRuntimeObserver();
@@ -210,7 +227,7 @@ switch (command)
         {
             if (args.Length < 3)
             {
-                Console.Error.WriteLine("Usage: deeptrace observe <symbolId> <durationMs> [parametersJson] [returnValueJson]");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] observe <symbolId> <durationMs> [parametersJson] [returnValueJson]");
                 return;
             }
             var symbolId = args[1];
@@ -242,7 +259,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace runtime <symbolId>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] runtime <symbolId>");
                 return;
             }
             var observations = indexer.GetRuntimeObservations(args[1]);
@@ -286,7 +303,7 @@ switch (command)
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("Usage: deeptrace evaluate <dllPath>");
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] evaluate <dllPath>");
                 return;
             }
             var dllPath = args[1];
@@ -334,20 +351,22 @@ switch (command)
 
     case "stats":
         {
-            Console.WriteLine($"Database: deeptrace.db");
-            Console.WriteLine($"Decompiler: IlspyDecompiler (stub — body extraction deferred)");
+            Console.WriteLine($"Database: {dbPath}");
+            Console.WriteLine($"Decompiler: IlspyDecompiler");
             break;
         }
 
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
-        PrintUsage();
+        PrintUsage(dbPath);
         break;
 }
 
-static void PrintUsage()
+static void PrintUsage(string currentDb)
 {
-    Console.WriteLine("Usage: deeptrace <command> [args...]");
+    Console.WriteLine("Usage: deeptrace [--db <path>] <command> [args...]");
+    Console.WriteLine();
+    Console.WriteLine($"Current database: {currentDb}");
     Console.WriteLine();
     Console.WriteLine("Commands:");
     Console.WriteLine("  discover <directory>              Discover managed assemblies");
@@ -513,4 +532,3 @@ static void PrintReport(DeepTrace.Core.Models.InvestigationReport report)
     Console.WriteLine("--- Validation Plan ---");
     Console.WriteLine(report.ValidationPlan);
 }
-

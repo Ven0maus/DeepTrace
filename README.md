@@ -36,6 +36,19 @@ dotnet run --project src/DeepTrace.Cli -- search "Greeter"
 dotnet run --project src/DeepTrace.Cli -- investigate "How does the game greet players?"
 ```
 
+### Multiple game directories
+
+Use `--db <path>` to target a specific database. Each game gets its own SQLite database.
+
+```bash
+# Index separate games into separate databases
+dotnet run --project src/DeepTrace.Cli -- --db games/unity.db index C:/Games/UnityGame
+dotnet run --project src/DeepTrace.Cli -- --db games/steamgame.db index C:/Games/SteamGame
+
+# Search a specific game
+dotnet run --project src/DeepTrace.Cli -- --db games/unity.db search "NPC"
+```
+
 ## CLI commands
 
 | Command | Description |
@@ -56,6 +69,8 @@ dotnet run --project src/DeepTrace.Cli -- investigate "How does the game greet p
 | `recipes [name]` | List or execute investigation recipes |
 | `evaluate <dllPath>` | Measure retrieval quality |
 | `stats` | Show indexer statistics |
+
+All commands accept `--db <path>` anywhere in args to target a specific database. Default: `deeptrace.db`.
 
 Full CLI reference: [docs/CLI.md](docs/CLI.md)
 
@@ -177,9 +192,7 @@ var report = workflow.Investigate("How does the game greet players?");
 
 ## Known limitations
 
-- ILSpy decompiler body extraction is fully implemented — no longer a stub
 - No semantic embeddings — BM25 scoring is lexical only
-- No BepInEx/HarmonyX runtime instrumentation plugin — only in-memory and SQLite observation storage
 - IL2CPP assemblies not supported (managed .NET only)
 - Static call graph incomplete for virtual dispatch, reflection, events, engine callbacks
 

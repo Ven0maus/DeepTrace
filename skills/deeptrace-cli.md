@@ -23,13 +23,27 @@ dotnet build DeepTrace.slnx
 dotnet run --project src/DeepTrace.Cli -- <command> [args...]
 ```
 
+### `--db <path>` flag
+
+All commands accept `--db <path>` to target a specific database. Each game gets its own SQLite database.
+
+```bash
+# Index a game into a named database
+dotnet run --project src/DeepTrace.Cli -- --db games/unity.db index C:/Games/UnityGame
+
+# Search that game
+dotnet run --project src/DeepTrace.Cli -- --db games/unity.db search "NPC"
+```
+
+Without `--db`, all commands use `deeptrace.db` in the current working directory.
+
 ## Commands
 
 ### `discover <directory>`
 Discover managed .NET assemblies in a directory. Excludes System.*, Microsoft.*, Windows.*, and framework assemblies.
 
 ### `index <directory>`
-Index all discovered assemblies. Creates `deeptrace.db`. Skips unchanged assemblies by hash.
+Index all discovered assemblies. Creates a SQLite database (default: `deeptrace.db`, or `--db <path>`). Skips unchanged assemblies by hash.
 
 ### `search <query> [limit]`
 Search indexed symbols by keyword. Results ranked by BM25 relevance. Default limit: 50.
@@ -101,6 +115,14 @@ Pre-defined patterns for common modding tasks:
 6. `investigate "How does the game greet players?"` — full AI investigation
 7. `recipes "Find Extension Points"` — find patch targets
 8. `evaluate <dllPath>` — measure search quality
+
+### Multi-game workflow
+
+```bash
+dotnet run -- --db games/unity.db index C:/Games/UnityGame
+dotnet run -- --db games/steamgame.db index C:/Games/SteamGame
+dotnet run -- --db games/unity.db search "NPC"
+```
 
 ## Full Documentation
 

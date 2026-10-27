@@ -22,6 +22,23 @@ The CLI binary is at `src/DeepTrace.Cli/bin/Debug/net10.0/deeptrace.dll` (run wi
 deeptrace <command> [args...]
 ```
 
+### `--db <path>` flag
+
+All commands accept `--db <path>` to target a specific SQLite database. Place it anywhere in the argument list.
+
+```bash
+# Index a game into a named database
+deeptrace --db games/unity.db index C:/Games/UnityGame
+
+# Search that game
+deeptrace --db games/unity.db search "NPC"
+
+# Default database (backward compatible)
+deeptrace index ./GameDirectory   # uses deeptrace.db
+```
+
+Without `--db`, all commands use `deeptrace.db` in the current working directory.
+
 ## Commands
 
 ### `discover`
@@ -326,4 +343,10 @@ TestLib::TestLib.Greeter
 
 ## Database
 
-The default database file is `deeptrace.db` in the current working directory. To use a different location, modify the connection string in `Program.cs`.
+Each invocation targets a single SQLite database file.
+
+- **Default:** `deeptrace.db` in the current working directory
+- **Custom:** `--db <path>` — parent directories are created automatically
+- **Multiple games:** Each game gets its own database file (e.g., `games/unity.db`, `games/steamgame.db`)
+
+Databases are self-contained. No cross-database queries are supported.
