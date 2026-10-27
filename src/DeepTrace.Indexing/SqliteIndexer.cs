@@ -29,7 +29,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
             var cmd = conn.Cmd("SELECT hash FROM assemblies WHERE name = @name")
@@ -64,7 +64,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
         var types = new List<TypeInfo>();
@@ -162,7 +162,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
         var methodCmd = conn.Cmd(@"SELECT s.full_name, s.signature, s.summary, m.declaring_type, m.body,
@@ -227,7 +227,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
         var methods = new List<MethodInfo>();
@@ -264,7 +264,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
         var results = new List<SearchResult>();
@@ -287,7 +287,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
         while (symReader.Read())
         {
-            results.Add(new SearchResult
+            var sr = new SearchResult
             {
                 SymbolId = symReader.GetString(0),
                 Name = symReader.GetString(2),
@@ -295,7 +295,9 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 FullyQualifiedName = symReader.GetString(1),
                 Signature = symReader.IsDBNull(4) ? null : symReader.GetString(4),
                 Assembly = symReader.GetString(5),
-            });
+            };
+            sr.RelevanceScore = Bm25Scorer.Score(sr, query);
+            results.Add(sr);
         }
 
         var methCmd = conn.Cmd(@"SELECT m.symbol_id, s.full_name, s.name, s2.name AS assembly, m.body
@@ -313,7 +315,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             var symbolId = methReader.GetString(0);
             if (!results.Any(r => r.SymbolId == symbolId))
             {
-                results.Add(new SearchResult
+                var sr = new SearchResult
                 {
                     SymbolId = symbolId,
                     Name = methReader.GetString(2),
@@ -321,10 +323,13 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     FullyQualifiedName = methReader.GetString(1),
                     Assembly = methReader.GetString(3),
                     Excerpt = GetExcerpt(methReader.GetString(4)),
-                });
+                };
+                sr.RelevanceScore = Bm25Scorer.Score(sr, query);
+                results.Add(sr);
             }
         }
 
+        results.Sort((a, b) => b.RelevanceScore.CompareTo(a.RelevanceScore));
         return [.. results.Take(limit)];
         }
     }
@@ -333,7 +338,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
         var symCmd = conn.Cmd(@"SELECT id, full_name, namespace, name, base_type
@@ -487,7 +492,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
             var cmd = conn.Cmd(@"SELECT s.full_name FROM method_callers c
@@ -506,7 +511,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
             var cmd = conn.Cmd(@"SELECT s.full_name FROM method_callees c
@@ -525,7 +530,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
             var cmd = conn.Cmd(@"SELECT s.full_name FROM type_hierarchy h
@@ -544,7 +549,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
             var cmd = conn.Cmd(@"SELECT s.full_name FROM type_hierarchy h
@@ -563,7 +568,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
             var results = new List<SearchResult>();
@@ -641,7 +646,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
         return (long)(conn.Cmd("SELECT COUNT(*) FROM assemblies WHERE name = @name")
@@ -662,7 +667,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
     private void InitializeDatabase()
     {
-        using var conn = new SqliteConnection($"Data Source={_databasePath}");
+        using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
         conn.Open();
         conn.Cmd(DatabaseSchema.CreateTables).ExecuteNonQuery();
     }
@@ -980,7 +985,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
             conn.Cmd(@"INSERT INTO runtime_observations (id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms)
                     VALUES (@id, @symbolId, @fqName, @assembly, @timestamp, @depth, @params, @returnValue, @durationMs)")
@@ -1001,7 +1006,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
             var observations = new List<RuntimeObservation>();
             var cmd = conn.Cmd(@"SELECT id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms
@@ -1031,7 +1036,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         lock (_lock)
         {
-            using var conn = new SqliteConnection($"Data Source={_databasePath}");
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
             var observations = new List<RuntimeObservation>();
             var cmd = conn.Cmd(@"SELECT id, symbol_id, fully_qualified_name, assembly, timestamp, depth, parameters, return_value, duration_ms

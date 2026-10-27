@@ -1,4 +1,5 @@
 using DeepTrace.Core.Models;
+using DeepTrace.Core.Retrieval;
 using DeepTrace.Core.Runtime;
 using DeepTrace.Decompiler;
 using DeepTrace.Indexing;
@@ -257,6 +258,80 @@ switch (command)
             break;
         }
 
+    case "recipes":
+        {
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Available recipes:");
+                foreach (var r in DeepTrace.Core.Ai.InvestigationRecipes.Recipes)
+                    Console.WriteLine($"  {r.Name}: {r.Description}");
+                return;
+            }
+            var recipeName = args[1];
+            var recipe = DeepTrace.Core.Ai.InvestigationRecipes.Recipes
+                .FirstOrDefault(r => r.Name.Equals(recipeName, System.StringComparison.OrdinalIgnoreCase));
+            if (recipe == null)
+            {
+                Console.Error.WriteLine($"Unknown recipe: {recipeName}");
+                Console.WriteLine("Available:");
+                foreach (var r in DeepTrace.Core.Ai.InvestigationRecipes.Recipes)
+                    Console.WriteLine($"  {r.Name}");
+                return;
+            }
+            Console.WriteLine(DeepTrace.Core.Ai.InvestigationRecipes.ExecuteAsText(recipe, indexer));
+            break;
+        }
+
+    case "evaluate":
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: deeptrace evaluate <dllPath>");
+                return;
+            }
+            var dllPath = args[1];
+            if (!File.Exists(dllPath))
+            {
+                Console.Error.WriteLine($"File not found: {dllPath}");
+                return;
+            }
+            // Build a temporary index for evaluation
+            var evalDir = Path.Combine(Path.GetTempPath(), $"deeptrace_eval_{Guid.NewGuid()}");
+            Directory.CreateDirectory(evalDir);
+            var evalDb = Path.Combine(evalDir, "eval.db");
+            File.Copy(dllPath, Path.Combine(evalDir, "eval.dll"), overwrite: true);
+            var evalIndexer = new SqliteIndexer(evalDb, new IlsyDecompiler());
+            var assemblies = evalIndexer.DiscoverAssemblies(evalDir);
+            foreach (var asm in assemblies)
+                evalIndexer.IndexAssembly(asm);
+
+            try
+            {
+                // Build gold standard from actual indexed methods
+                var greeterMethods = evalIndexer.GetMethods(assemblies[0].Name)
+                    .Where(m => m.DeclaringTypeFullName.Contains("Greeter"))
+                    .Select(m => m.SymbolId)
+                    .ToList();
+                var greetMethod = evalIndexer.GetMethods(assemblies[0].Name)
+                    .FirstOrDefault(m => m.Name == "Greet");
+
+                var evaluations = new List<(string, IReadOnlyList<string>)>
+                {
+                    ("Greeter", greeterMethods),
+                    ("Greet", greetMethod != null ? new List<string> { greetMethod.SymbolId } : new List<string>()),
+                };
+
+                var report = RetrievalEvaluator.Evaluate(evaluations, evalIndexer);
+                Console.WriteLine(RetrievalEvaluator.FormatReport(report));
+            }
+            finally
+            {
+                evalIndexer.Dispose();
+            }
+            Directory.Delete(evalDir, true);
+            break;
+        }
+
     case "stats":
         {
             Console.WriteLine($"Database: deeptrace.db");
@@ -288,6 +363,8 @@ static void PrintUsage()
     Console.WriteLine("  investigate <question>            Run AI investigation workflow");
     Console.WriteLine("  observe <symbolId> <durationMs>   Record a runtime observation");
     Console.WriteLine("  runtime <symbolId>                Show runtime observations");
+    Console.WriteLine("  recipes [name]                    List or execute investigation recipes");
+    Console.WriteLine("  evaluate <dllPath>                Measure retrieval quality");
     Console.WriteLine("  stats                             Show indexer stats");
 }
 

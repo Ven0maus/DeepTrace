@@ -10,6 +10,6 @@ public sealed class SearchResult
     public string Assembly { get; init; } = string.Empty;
     public SourceLocation? SourceLocation { get; init; }
     public string? Excerpt { get; init; }
-    public double RelevanceScore { get; init; }
-    public string? RelevanceExplanation { get; init; }
+    public double RelevanceScore { get; set; }
+    public string? RelevanceExplanation { get; set; }
 }
