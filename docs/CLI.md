@@ -73,7 +73,7 @@ Output shows indexed and skipped assemblies.
 
 ### `search`
 
-Search indexed symbols by keyword or phrase. Results ranked by BM25 relevance.
+Search indexed symbols by keyword or phrase. Results ranked by BM25 relevance fused with LSA semantic embeddings.
 
 ```
 deeptrace search <query> [limit]
@@ -85,6 +85,10 @@ deeptrace search <query> [limit]
 | `limit` | Maximum results | 50 |
 
 Scans symbol names, fully qualified names, signatures, and method body excerpts.
+
+**Scoring:** BM25 relevance fused with LSA cosine similarity. Fusion weights adapt by query length: 1 token (100% BM25), 2 tokens (85/15), 3-4 tokens (75/25), 5+ tokens (60/40). Single-token queries use pure BM25 since semantic embeddings require multiple terms.
+
+**Tokenization:** Terms split on whitespace and punctuation (`._-():,`). Single-char tokens preserved (game APIs like Vector3). English stopwords filtered ("load", "data", "get", "set", "create", "the", "is", etc.).
 
 Output format:
 ```

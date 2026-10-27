@@ -13,7 +13,7 @@ src/
   DeepTrace.Decompiler/   — ILSpy-based decompiler (IlspyDecompiler.cs)
   DeepTrace.Indexing/     — SQLite indexer, BM25 scorer, assembly discoverer, summary generator
 tests/
-  DeepTrace.Tests/        — 13 test files + nested BenchmarkLib + TestLib sub-projects
+  DeepTrace.Tests/        — 15 test files + nested BenchmarkLib + TestLib sub-projects
 test-assets/                 — kept but currently empty
 docs/
   API.md                  — Full API reference
@@ -233,7 +233,7 @@ Do not claim build or test passed unless actually executed successfully. Do not 
 | Command | Purpose |
 |---------|---------|
 | `dotnet build DeepTrace.slnx` | Build all projects (restore + build) |
-| `dotnet test DeepTrace.Tests.csproj` | Run all 196 tests |
+| `dotnet test DeepTrace.Tests.csproj` | Run all 214 tests |
 | `dotnet format --verify-no-changes` | Check formatting against `.editorconfig` (IDE guidance only; not enforced in CI) |
 
 ### Formatting
@@ -269,15 +269,18 @@ Do not claim build or test passed unless actually executed successfully. Do not 
 7. Investigation recipes for common modding tasks.
 8. Engine callback detection (Unity/Unreal conventions).
 9. Interface implementation mapping.
+10. LSA semantic embeddings (TF-IDF matrix, power-iteration SVD, cosine similarity search).
+11. BM25 + semantic search fusion with adaptive weights by query length.
+12. English stopword filtering in tokenizer (LsaEmbedder + Bm25Scorer).
 
 ### Not Yet Implemented
 
-- Semantic retrieval (embedding-based search).
 - BepInEx/HarmonyX runtime instrumentation hooks.
 - LLM integration layer.
 - Incremental indexing (hash-based skip for partially changed directories).
 - Call graph visualization.
 - Cross-assembly reference resolution.
+- Semantic retrieval with learned embeddings (no IDF-weighted power iteration libraries).
 
 ## Testing
 
@@ -287,7 +290,8 @@ Test project: `tests/DeepTrace.Tests/DeepTrace.Tests.csproj`
 |------------|----------|
 | `IndexingTests` | Assembly discovery, type/method indexing, hash-based skip, BM25 search, method retrieval, null handling |
 | `IlspyDecompilerSmokeTests` | Decompile method, type, tryDecompile, dispose |
-| `Bm25ScorerTests` | Exact match, prefix match, full-text match, summary scoring |
+| `Bm25ScorerTests` | Exact match, prefix match, full-text match, summary scoring, stopword filtering |
+| `LsaEmbedderTests` | Tokenize, TF-IDF matrix build, power-iteration SVD, query projection, semantic similarity, stopword filtering |
 | `InvestigationWorkflowTests` | Concept extraction, search, method body fetch, graph traversal, report synthesis |
 | `InvestigationWorkflowRuntimeTests` | Runtime observation correlation, confidence boost |
 | `InvestigationToolsTests` | SearchCode, GetMethod, GetCallers, GetCallees, SearchReferences, GetRelatedMethods |
@@ -316,3 +320,6 @@ Test assets: `tests/DeepTrace.Tests/TestLib` (Greeter, Class1, INamedInterface, 
 - **Interface implementations detected via explicit naming (e.g., `IFoo.Bar`) and overrides.** Does not cover implicit implementations on types that don't declare them in Cecil metadata.
 - **`MethodInfo.Body` may be null.** Decompilation can fail for abstract methods, methods with no body, or if ILSpy throws. Check before using body text.
 - **`InvestigationWorkflow` parses its own tool output.** Tight coupling between `InvestigationTools` output format and `InvestigationWorkflow` parsers. Changing one requires updating the other.
+- **Tokenizer filters English stopwords** (70 terms: "load", "data", "get", "set", "create", "the", "is", "and", etc.) but preserves single-char tokens (important for game APIs like "Vector3"). Stopword list is shared between LsaEmbedder and Bm25Scorer.
+- **LSA uses TF-IDF with smoothed IDF** (`log(N/df) + 1`). Common terms across all methods get suppressed. Power iteration extracts top-K components sequentially with Gram-Schmidt orthogonalization.
+- **Search fusion weights adapt by query length.** 1 token: 100% BM25. 2 tokens: 85/15. 3-4: 75/25. 5+: 60/40.

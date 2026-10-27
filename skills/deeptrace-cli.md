@@ -49,7 +49,7 @@ Discover managed .NET assemblies in a directory. Excludes System.*, Microsoft.*,
 Index all discovered assemblies. Creates a SQLite database (default: `deeptrace.db`, or `--db <path>`). Skips unchanged assemblies by hash.
 
 ### `search <query> [limit]`
-Search indexed symbols by keyword. Results ranked by BM25 relevance. Default limit: 50.
+Search indexed symbols by keyword or phrase. Results ranked by BM25 relevance fused with LSA semantic embeddings. Fusion weights adapt by query length: 1 token → pure BM25, 2 tokens → 85/15, 3-4 → 75/25, 5+ → 60/40. Default limit: 50.
 
 ### `methods <assemblyName>`
 List all methods in an assembly.

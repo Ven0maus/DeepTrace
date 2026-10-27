@@ -395,7 +395,7 @@ Excluded assemblies include: System.*, Microsoft.*, Windows.*, netstandard, Syst
 
 ### `Bm25Scorer`
 
-BM25-inspired relevance scoring for search results.
+BM25-inspired relevance scoring for search results. Tokenization filters English stopwords and preserves single-char tokens.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
@@ -403,6 +403,23 @@ BM25-inspired relevance scoring for search results.
 | `ScoreSummary(string? summary, string query)` | `double` | Score a summary against a query. |
 
 Parameters: K1=1.5, B=0.75. Exact name match: +10.0, prefix match: +3.0.
+
+### `LsaEmbedder`
+
+Latent Semantic Analysis engine. Builds TF-IDF term-document matrix from method bodies, extracts top-K latent dimensions via power-iteration SVD, and projects queries/documents into the same latent space for cosine similarity scoring.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `Tokenize(string text)` | `string[]` | Tokenize text. Filters stopwords, preserves single-char tokens. |
+| `BuildAndStore(string dbPath, IReadOnlyList<(string, string)>)` | `void` | Build TF-IDF matrix, run power-iteration SVD, store embeddings/vocab/components/IDF in SQLite. |
+| `LoadStored(string dbPath)` | `IReadOnlyDictionary<string, double[]>` | Load per-method embedding vectors. |
+| `LoadComponents(string dbPath)` | `double[,]` | Load principal components matrix (k x n). |
+| `LoadVocabulary(string dbPath)` | `IReadOnlyDictionary<string, int>` | Load term-to-index mapping. |
+| `LoadIdf(string dbPath)` | `IReadOnlyDictionary<string, double>` | Load per-term IDF values. |
+| `ComputeQueryEmbedding(string, IReadOnlyDictionary<string, int>, double[,], IReadOnlyDictionary<string, double>?)` | `double[]` | Project query into latent space with IDF weighting. |
+| `CosineSimilarity(double[], double[])` | `double` | Cosine similarity between two vectors. |
+
+Configuration: `Dimensions = 50` (latent space size). Token cache: LRU, max 4096 entries. Power iteration: 30 max iterations with early stop at convergence (change < 0.0001), Gram-Schmidt orthogonalization per component, 2 re-convergence iterations after orthogonalization.
 
 ### `MethodSummaryGenerator`
 

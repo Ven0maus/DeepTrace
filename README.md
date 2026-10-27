@@ -10,7 +10,7 @@ Target: decompiled .NET assemblies and BepInEx-based mods.
 
 - Index assemblies using Mono.Cecil metadata extraction
 - Search by name, signature, namespace, or source body text
-- Rank results with BM25-inspired relevance scoring
+- Rank results with BM25-inspired relevance scoring fused with LSA semantic embeddings
 - Analyze structural relationships: callers, callees, type hierarchies, references
 - Run AI investigation workflows with iterative search, caller/callee traversal, and evidence-based reports
 - Record and query runtime observations (via SQLite — single `observe` or bulk `import-observations`)
@@ -92,7 +92,7 @@ src/
   DeepTrace.Indexing/     SqliteIndexer (SQLite + FTS5), Bm25Scorer, AssemblyDiscoverer
   DeepTrace.Cli/          CLI entry point with all commands
 tests/
-  DeepTrace.Tests/        xUnit test suite (198 tests)
+  DeepTrace.Tests/        xUnit test suite (214 tests)
   TestLib/                Self-contained test assembly
   BenchmarkLib/           Benchmark test fixtures
 ```
@@ -196,11 +196,12 @@ var report = workflow.Investigate("How does the game greet players?");
 
 ## Known limitations
 
-- No semantic embeddings — BM25 scoring is lexical only
+- LSA embeddings use power iteration (no matrix factorization libraries) — components beyond top-10 may capture noise
 - IL2CPP assemblies not supported (managed .NET only)
 - Static call graph does not cover reflection — use runtime observations for reflection-based calls
 - Decompiler extracts method bodies by brace-counting from type source
 - Runtime observations persist via `observe` or `import-observations`; no persistent instrumentation (BepInEx/HarmonyX hooks not implemented)
+- Search fusion weights are adaptive by query length but not tuned per-domain
 
 ## License
 
