@@ -114,4 +114,30 @@ public interface IIndexer
     /// Get all stored runtime observations.
     /// </summary>
     IReadOnlyList<RuntimeObservation> GetAllRuntimeObservations();
+
+    /// <summary>
+    /// Get all call graph edges for a method (both as caller and callee).
+    /// </summary>
+    /// <param name="methodSymbolId">Symbol ID of the method.</param>
+    IReadOnlyList<CallGraphEdge> GetCallGraphEdges(string methodSymbolId);
+
+    /// <summary>
+    /// Get call graph edges filtered by type.
+    /// </summary>
+    /// <param name="methodSymbolId">Symbol ID of the method.</param>
+    /// <param name="edgeType">Edge type filter (direct, virtual, delegate, event_subscription, event_unsubscription).</param>
+    IReadOnlyList<CallGraphEdge> GetCallGraphEdgesByType(string methodSymbolId, string edgeType);
+
+    /// <summary>
+    /// Get concrete implementations of an interface method.
+    /// </summary>
+    /// <param name="interfaceName">Fully qualified interface name.</param>
+    /// <param name="methodName">Method name on the interface.</param>
+    IReadOnlyList<string> GetInterfaceImplementations(string interfaceName, string methodName);
+
+    /// <summary>
+    /// Get engine callback methods detected by convention for a type.
+    /// </summary>
+    /// <param name="typeSymbolId">Symbol ID of the type (e.g., "Assembly::Namespace.Type").</param>
+    IReadOnlyList<string> GetEngineCallbacks(string typeSymbolId);
 }

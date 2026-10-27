@@ -8,6 +8,9 @@ Use this skill when working with the DeepTrace CLI to index, search, and investi
 - User wants to index assemblies for search
 - User wants to search for code by keyword
 - User wants to find callers/callees of a method
+- User wants to explore enriched call graph (virtual, delegate, event edges)
+- User wants to find engine lifecycle callbacks (Unity/Unreal)
+- User wants to find interface implementations
 - User wants to run an AI investigation
 - User wants to record runtime observations
 - User wants to evaluate retrieval quality
@@ -65,6 +68,15 @@ Find direct callers of a method.
 
 ### `callees <methodSymbolId>`
 Find direct callees of a method.
+
+### `call-graph <methodId> [edgeType]`
+Show enriched call graph edges: direct, virtual, delegate, event_subscription, event_unsubscription.
+
+### `engine-callbacks <typeId>`
+Show detected Unity/Unreal engine lifecycle callbacks (Awake, Update, Start, etc.).
+
+### `interface-implementations <iface> <method>`
+Show concrete implementations of an interface method (explicit + implicit).
 
 ### `references <symbolId>`
 Find all references to a symbol (type refs, callers, callees).

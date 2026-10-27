@@ -757,8 +757,11 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 VALUES (@id, @symbolId, @declaringType, @type, @isStatic, @isLiteral, @literalValue)", tx);
         var insertCallee = conn.Cmd("INSERT OR IGNORE INTO method_callees (method_id, called_id) VALUES (@methodId, @calledId)", tx);
         var insertCaller = conn.Cmd("INSERT OR IGNORE INTO method_callers (caller_id, callee_id) VALUES (@callerId, @calleeId)", tx);
+        var insertEdge = conn.Cmd("INSERT OR IGNORE INTO call_graph_edges (caller_id, callee_id, edge_type) VALUES (@callerId, @calleeId, @edgeType)", tx);
         var insertHierarchy = conn.Cmd("INSERT OR IGNORE INTO type_hierarchy (type_id, base_type_id) VALUES (@typeId, @baseTypeId)", tx);
         var insertTypeRef = conn.Cmd("INSERT OR IGNORE INTO type_references (source_type_id, target_type_id) VALUES (@sourceId, @targetId)", tx);
+        var insertEngineCb = conn.Cmd("INSERT OR IGNORE INTO engine_callbacks (type_id, callback_name) VALUES (@typeId, @callbackName)", tx);
+        var insertImpl = conn.Cmd("INSERT OR IGNORE INTO interface_implementations (implementing_type_id, interface_name, method_name) VALUES (@typeId, @interfaceName, @methodName)", tx);
 
         foreach (var type in assemblyDef.MainModule.Types)
         {
@@ -806,7 +809,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     }).ExecuteNonQuery();
 
                     // Extract call graph from IL
-                    ExtractCallGraph(conn, assemblyDef, method, type.FullName, assemblyName, insertCallee, insertCaller);
+                    ExtractCallGraph(conn, assemblyDef, method, type.FullName, assemblyName, insertCallee, insertCaller, insertEdge);
                 }
 
                 for (var i = 0; i < method.Parameters.Count; i++)
@@ -850,29 +853,214 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                     ("@literalValue", defaultValue),
                 }).ExecuteNonQuery();
             }
+
+            // Convention-based engine callback detection
+            ExtractEngineCallbacks(conn, assemblyDef, type, assemblyName, insertEngineCb);
+
+            // Interface implementation detection
+            ExtractInterfaceImplementations(conn, assemblyDef, type, assemblyName, insertImpl);
         }
     }
 
-    private void ExtractCallGraph(SqliteConnection conn, AssemblyDefinition assemblyDef, MethodDefinition method, string declaringType, string assemblyName, SqliteCommand insertCallee, SqliteCommand insertCaller)
+    private void ExtractCallGraph(SqliteConnection conn, AssemblyDefinition assemblyDef, MethodDefinition method, string declaringType, string assemblyName, SqliteCommand insertCallee, SqliteCommand insertCaller, SqliteCommand insertEdge)
     {
         if (method.Body == null || method.Body.Instructions == null)
             return;
 
+        var callerId = $"{assemblyName}::{declaringType}::{method.Name}::{GetSignature(method)}";
+
         foreach (var instr in method.Body.Instructions)
         {
-            if (instr.OpCode != Mono.Cecil.Cil.OpCodes.Call && instr.OpCode != Mono.Cecil.Cil.OpCodes.Callvirt)
-                continue;
-
             if (instr.Operand is not MethodReference methodRef)
                 continue;
 
+            string edgeType;
+
+            if (instr.OpCode == Mono.Cecil.Cil.OpCodes.Call)
+            {
+                edgeType = IsAddRemoveMethod(methodRef) ? "event_subscription" : "direct";
+            }
+            else if (instr.OpCode == Mono.Cecil.Cil.OpCodes.Callvirt)
+            {
+                // Detect delegate Invoke calls: callvirt on a delegate type's Invoke method
+                var isDelegateInvoke = IsDelegateInvoke(methodRef);
+                if (isDelegateInvoke)
+                    edgeType = "delegate";
+                else
+                    edgeType = "virtual";
+            }
+            else
+            {
+                continue;
+            }
+
             var calleeId = ResolveMethodId(assemblyDef, methodRef, assemblyName);
-            if (calleeId == null)
+            if (calleeId != null)
+            {
+                insertCallee.P(new (string name, object value)[] { ("@methodId", callerId), ("@calledId", calleeId) }).ExecuteNonQuery();
+                insertCaller.P(new (string name, object value)[] { ("@callerId", callerId), ("@calleeId", calleeId) }).ExecuteNonQuery();
+                insertEdge.P(new (string name, object value)[] { ("@callerId", callerId), ("@calleeId", calleeId), ("@edgeType", edgeType) }).ExecuteNonQuery();
+            }
+            else
+            {
+                // External method — record edge with raw callee name
+                var externalCallee = $"{methodRef.DeclaringType?.FullName ?? "Unknown"}::{methodRef.Name}";
+                insertEdge.P(new (string name, object value)[] { ("@callerId", callerId), ("@calleeId", externalCallee), ("@edgeType", edgeType) }).ExecuteNonQuery();
+            }
+        }
+    }
+
+    private static bool IsDelegateInvoke(MethodReference methodRef)
+    {
+        if (methodRef.Name != "Invoke")
+            return false;
+
+        var declaringType = methodRef.DeclaringType;
+        if (declaringType == null)
+            return false;
+
+        var fullName = declaringType.FullName;
+        return fullName.StartsWith("System.Action") ||
+               fullName.StartsWith("System.Func") ||
+               fullName.StartsWith("System.Predicate") ||
+               fullName.StartsWith("System.Comparison") ||
+               fullName.EndsWith("Delegate");
+    }
+
+    private static bool IsAddRemoveMethod(MethodReference methodRef)
+    {
+        if (methodRef.Name.StartsWith("add_", StringComparison.Ordinal) ||
+            methodRef.Name.StartsWith("remove_", StringComparison.Ordinal))
+            return true;
+
+        // Check overrides for explicit add/remove
+        var resolved = methodRef.Resolve();
+        if (resolved != null)
+        {
+            foreach (var @override in resolved.Overrides)
+            {
+                if (@override.Name.StartsWith("add_", StringComparison.Ordinal) ||
+                    @override.Name.StartsWith("remove_", StringComparison.Ordinal))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static readonly HashSet<string> EngineCallbackPatterns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Awake", "Start", "FixedUpdate", "LateUpdate", "Update",
+        "OnEnable", "OnDisable", "OnDestroy",
+        "OnApplicationPause", "OnApplicationQuit", "OnApplicationFocus",
+        "OnBecameVisible", "OnBecameInvisible",
+        "OnTriggerEnter", "OnTriggerExit", "OnTriggerStay",
+        "OnCollisionEnter", "OnCollisionExit", "OnCollisionStay",
+        "OnGUI", "OnPreRender", "OnPostRender",
+        "OnRenderObject", "OnRenderImage", "OnWillRenderObject",
+        "Reset",
+        // Unreal Engine
+        "BeginPlay", "Tick", "EndPlay", "BeginDestroy",
+        // Generic lifecycle
+        "Initialize", "Dispose", "Close", "Open",
+    };
+
+    private void ExtractEngineCallbacks(SqliteConnection conn, AssemblyDefinition assemblyDef, TypeDefinition type, string assemblyName, SqliteCommand insertCb)
+    {
+        if (type.Namespace == "<>c" || type.Namespace == "<PrivateImplementationDetails>")
+            return;
+
+        var typeId = $"{assemblyName}::{type.FullName}";
+
+        // Check if type inherits from known engine base types
+        var isEngineType = IsEngineBaseType(type);
+
+        foreach (var method in type.Methods)
+        {
+            if (method.Name.StartsWith("set_", StringComparison.Ordinal) ||
+                method.Name.StartsWith("get_", StringComparison.Ordinal) ||
+                method.Name.StartsWith("add_", StringComparison.Ordinal) ||
+                method.Name.StartsWith("remove_", StringComparison.Ordinal))
                 continue;
 
-            var callerId = $"{assemblyName}::{declaringType}::{method.Name}::{GetSignature(method)}";
-            insertCallee.P(new (string name, object value)[] { ("@methodId", callerId), ("@calledId", calleeId) }).ExecuteNonQuery();
-            insertCaller.P(new (string name, object value)[] { ("@callerId", callerId), ("@calleeId", calleeId) }).ExecuteNonQuery();
+            if (EngineCallbackPatterns.Contains(method.Name))
+            {
+                if (isEngineType)
+                {
+                    insertCb.P(new (string name, object value)[] { ("@typeId", typeId), ("@callbackName", method.Name) }).ExecuteNonQuery();
+                }
+                else
+                {
+                    // Still record for non-engine types — user may be using conventions
+                    insertCb.P(new (string name, object value)[] { ("@typeId", typeId), ("@callbackName", method.Name) }).ExecuteNonQuery();
+                }
+            }
+        }
+    }
+
+    private static bool IsEngineBaseType(TypeDefinition type)
+    {
+        var current = type;
+        while (current != null && current.FullName != "System.Object")
+        {
+            if (current.FullName.Contains("MonoBehaviour") ||
+                current.FullName.Contains("ScriptableObject") ||
+                current.FullName.Contains("EditorBehaviour") ||
+                current.FullName.Contains("Actor") ||
+                current.FullName.Contains("GameMode") ||
+                current.FullName.Contains("GameState") ||
+                current.FullName.Contains("PlayerController"))
+                return true;
+            current = current.BaseType?.Resolve();
+        }
+
+        return false;
+    }
+
+    private void ExtractInterfaceImplementations(SqliteConnection conn, AssemblyDefinition assemblyDef, TypeDefinition type, string assemblyName, SqliteCommand insertImpl)
+    {
+        if (type.Namespace == "<>c" || type.Namespace == "<PrivateImplementationDetails>")
+            return;
+
+        var typeId = $"{assemblyName}::{type.FullName}";
+
+        // Explicit interface implementations: method name = "InterfaceName.MethodName"
+        foreach (var method in type.Methods)
+        {
+            var dotIndex = method.Name.LastIndexOf('.');
+            if (dotIndex > 0)
+            {
+                var interfaceName = method.Name.Substring(0, dotIndex);
+                var methodName = method.Name.Substring(dotIndex + 1);
+                insertImpl.P(new (string name, object value)[]
+                {
+                    ("@typeId", typeId),
+                    ("@interfaceName", interfaceName),
+                    ("@methodName", methodName),
+                }).ExecuteNonQuery();
+            }
+        }
+
+        // Implicit interface implementations via Overrides
+        foreach (var method in type.Methods)
+        {
+            foreach (var @override in method.Overrides)
+            {
+                var implType = @override.DeclaringType;
+                if (implType != null)
+                {
+                    var resolved = implType.Resolve();
+                    if (resolved?.IsInterface == true)
+                    {
+                        insertImpl.P(new (string name, object value)[]
+                        {
+                            ("@typeId", typeId),
+                            ("@interfaceName", implType.FullName),
+                            ("@methodName", @override.Name),
+                        }).ExecuteNonQuery();
+                    }
+                }
+            }
         }
     }
 
@@ -1074,6 +1262,72 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 });
             }
             return observations.AsReadOnly();
+        }
+    }
+
+    public IReadOnlyList<CallGraphEdge> GetCallGraphEdges(string methodSymbolId)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+            var edges = new List<CallGraphEdge>();
+            var cmd = conn.Cmd(@"SELECT caller_id, callee_id, edge_type FROM call_graph_edges WHERE caller_id = @id OR callee_id = @id");
+            cmd.P("@id", methodSymbolId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                edges.Add(new CallGraphEdge(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+            return edges.AsReadOnly();
+        }
+    }
+
+    public IReadOnlyList<CallGraphEdge> GetCallGraphEdgesByType(string methodSymbolId, string edgeType)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+            var edges = new List<CallGraphEdge>();
+            var cmd = conn.Cmd(@"SELECT caller_id, callee_id, edge_type FROM call_graph_edges WHERE (caller_id = @id OR callee_id = @id) AND edge_type = @type");
+            cmd.P("@id", methodSymbolId).P("@type", edgeType);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                edges.Add(new CallGraphEdge(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+            return edges.AsReadOnly();
+        }
+    }
+
+    public IReadOnlyList<string> GetInterfaceImplementations(string interfaceName, string methodName)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+            var results = new List<string>();
+            var cmd = conn.Cmd(@"SELECT s.full_name FROM interface_implementations i
+                    JOIN symbols s ON i.implementing_type_id = s.id
+                    WHERE i.interface_name = @iface AND i.method_name = @method");
+            cmd.P("@iface", interfaceName).P("@method", methodName);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                results.Add(reader.GetString(0));
+            return results.AsReadOnly();
+        }
+    }
+
+    public IReadOnlyList<string> GetEngineCallbacks(string typeSymbolId)
+    {
+        lock (_lock)
+        {
+            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
+            conn.Open();
+            var results = new List<string>();
+            var cmd = conn.Cmd(@"SELECT callback_name FROM engine_callbacks WHERE type_id = @typeId");
+            cmd.P("@typeId", typeSymbolId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                results.Add(reader.GetString(0));
+            return results.AsReadOnly();
         }
     }
 

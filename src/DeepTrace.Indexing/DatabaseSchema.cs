@@ -175,5 +175,28 @@ internal static class DatabaseSchema
 
         CREATE INDEX IF NOT EXISTS idx_runtime_symbol ON runtime_observations(symbol_id);
         CREATE INDEX IF NOT EXISTS idx_runtime_timestamp ON runtime_observations(timestamp);
+
+        -- Enriched call graph with edge type classification
+        CREATE TABLE IF NOT EXISTS call_graph_edges (
+            caller_id TEXT NOT NULL REFERENCES methods(symbol_id) ON DELETE CASCADE,
+            callee_id TEXT NOT NULL,
+            edge_type TEXT NOT NULL DEFAULT 'direct',
+            PRIMARY KEY (caller_id, callee_id)
+        );
+
+        -- Convention-based engine callback detection (Unity, Unreal, etc.)
+        CREATE TABLE IF NOT EXISTS engine_callbacks (
+            type_id TEXT NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+            callback_name TEXT NOT NULL,
+            PRIMARY KEY (type_id, callback_name)
+        );
+
+        -- Interface method → concrete implementation mapping
+        CREATE TABLE IF NOT EXISTS interface_implementations (
+            implementing_type_id TEXT NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+            interface_name TEXT NOT NULL,
+            method_name TEXT NOT NULL,
+            PRIMARY KEY (implementing_type_id, interface_name, method_name)
+        );
     ";
 }

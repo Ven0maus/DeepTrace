@@ -21,6 +21,10 @@ Primary interface for indexing and querying decompiled .NET assemblies.
 | `Search(string query, int limit)` | `IReadOnlyList<SearchResult>` | Search indexed symbols by keyword. Results ranked by BM25 relevance. Default limit: 50. |
 | `GetCallers(string methodSymbolId)` | `IReadOnlyList<string>` | Find direct callers of a method. |
 | `GetCallees(string methodSymbolId)` | `IReadOnlyList<string>` | Find direct callees of a method. |
+| `GetCallGraphEdges(string methodSymbolId)` | `IReadOnlyList<CallGraphEdge>` | Get enriched call graph edges for a method (direct, virtual, delegate, event). |
+| `GetCallGraphEdgesByType(string methodSymbolId, string edgeType)` | `IReadOnlyList<CallGraphEdge>` | Get call graph edges filtered by type. |
+| `GetInterfaceImplementations(string interfaceName, string methodName)` | `IReadOnlyList<string>` | Get concrete implementations of an interface method. |
+| `GetEngineCallbacks(string typeSymbolId)` | `IReadOnlyList<string>` | Get detected Unity/Unreal engine lifecycle callbacks for a type. |
 | `SearchReferences(string symbolId)` | `IReadOnlyList<SearchResult>` | Find all references to a symbol (type refs, callers, callees). |
 | `GetDerivedTypes(string typeSymbolId)` | `IReadOnlyList<string>` | Find types that derive from the specified type. |
 | `GetBaseTypes(string typeSymbolId)` | `IReadOnlyList<string>` | Find base types of the specified type. |
@@ -171,6 +175,18 @@ Metadata for a single field extracted from a decompiled assembly.
 #### `PropertyInfo`
 
 Metadata for a single property extracted from a decompiled assembly.
+
+#### `CallGraphEdge` (record)
+
+A single edge in the enriched call graph.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `CallerId` | `string` | Symbol ID of the calling method. |
+| `CalleeId` | `string` | Symbol ID of the called method. |
+| `EdgeType` | `string` | Type of call: `direct`, `virtual`, `delegate`, `event_subscription`, `event_unsubscription`. |
+
+#### `FieldInfo`
 
 | Property | Type | Description |
 |----------|------|-------------|

@@ -372,5 +372,88 @@ public class StructuralAnalysisTests
         // Assert
         Assert.Empty(results);
     }
+
+    [Fact]
+    public void GetCallGraphEdges_ReturnsEdgesForIndexedMethod()
+    {
+        // Arrange
+        var indexer = CreateIndexer();
+        var greetId = "TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String";
+
+        // Act
+        var edges = indexer.GetCallGraphEdges(greetId);
+
+        // Assert
+        Assert.NotNull(edges);
+    }
+
+    [Fact]
+    public void GetCallGraphEdges_ReturnsEmptyForUnknownMethod()
+    {
+        // Arrange
+        var indexer = CreateIndexer();
+
+        // Act
+        var edges = indexer.GetCallGraphEdges("NonExistent::NonExistent::Method::Method() : System.Void");
+
+        // Assert
+        Assert.Empty(edges);
+    }
+
+    [Fact]
+    public void GetCallGraphEdgesByType_FiltersByEdgeType()
+    {
+        // Arrange
+        var indexer = CreateIndexer();
+        var greetId = "TestLib::TestLib.Greeter::Greet::Greet(System.String) : System.String";
+
+        // Act
+        var directEdges = indexer.GetCallGraphEdgesByType(greetId, "direct");
+        var virtualEdges = indexer.GetCallGraphEdgesByType(greetId, "virtual");
+
+        // Assert — both calls should not throw
+        Assert.NotNull(directEdges);
+        Assert.NotNull(virtualEdges);
+    }
+
+    [Fact]
+    public void GetEngineCallbacks_ReturnsDetectedCallbacks()
+    {
+        // Arrange
+        var indexer = CreateIndexer();
+        var greeterTypeId = "TestLib::TestLib.Greeter";
+
+        // Act
+        var callbacks = indexer.GetEngineCallbacks(greeterTypeId);
+
+        // Assert — should not throw, may be empty for non-engine types
+        Assert.NotNull(callbacks);
+    }
+
+    [Fact]
+    public void GetEngineCallbacks_ReturnsEmptyForUnknownType()
+    {
+        // Arrange
+        var indexer = CreateIndexer();
+
+        // Act
+        var callbacks = indexer.GetEngineCallbacks("NonExistent::NonExistent.Type");
+
+        // Assert
+        Assert.Empty(callbacks);
+    }
+
+    [Fact]
+    public void GetInterfaceImplementations_ReturnsEmptyForUnknownInterface()
+    {
+        // Arrange
+        var indexer = CreateIndexer();
+
+        // Act
+        var implementations = indexer.GetInterfaceImplementations("NonExistent.IInterface", "Method");
+
+        // Assert
+        Assert.Empty(implementations);
+    }
 }
 

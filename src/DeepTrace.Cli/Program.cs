@@ -356,6 +356,68 @@ switch (command)
             break;
         }
 
+    case "call-graph":
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] call-graph <methodSymbolId> [edgeType]");
+                return;
+            }
+            var methodId = args[1];
+            var edgeType = args.Length > 2 ? args[2] : null;
+            IReadOnlyList<CallGraphEdge> edges;
+            if (edgeType != null)
+                edges = indexer.GetCallGraphEdgesByType(methodId, edgeType);
+            else
+                edges = indexer.GetCallGraphEdges(methodId);
+
+            Console.WriteLine($"=== Call Graph for {methodId} ===");
+            if (edges.Count == 0)
+            {
+                Console.WriteLine("  No edges found.");
+            }
+            else
+            {
+                foreach (var edge in edges)
+                    Console.WriteLine($"  [{edge.EdgeType}] {edge.CallerId} -> {edge.CalleeId}");
+            }
+            break;
+        }
+
+    case "engine-callbacks":
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] engine-callbacks <typeSymbolId>");
+                return;
+            }
+            var callbacks = indexer.GetEngineCallbacks(args[1]);
+            Console.WriteLine($"=== Engine Callbacks for {args[1]} ===");
+            if (callbacks.Count == 0)
+                Console.WriteLine("  No engine callbacks detected.");
+            else
+                foreach (var cb in callbacks)
+                    Console.WriteLine($"  {cb}");
+            break;
+        }
+
+    case "interface-implementations":
+        {
+            if (args.Length < 3)
+            {
+                Console.Error.WriteLine("Usage: deeptrace [--db <path>] interface-implementations <interfaceName> <methodName>");
+                return;
+            }
+            var implementations = indexer.GetInterfaceImplementations(args[1], args[2]);
+            Console.WriteLine($"=== Implementations of {args[1]}.{args[2]} ===");
+            if (implementations.Count == 0)
+                Console.WriteLine("  No implementations found.");
+            else
+                foreach (var impl in implementations)
+                    Console.WriteLine($"  {impl}");
+            break;
+        }
+
     default:
         Console.Error.WriteLine($"Unknown command: {command}");
         PrintUsage(dbPath);
@@ -385,6 +447,9 @@ static void PrintUsage(string currentDb)
     Console.WriteLine("  recipes [name]                    List or execute investigation recipes");
     Console.WriteLine("  evaluate <dllPath>                Measure retrieval quality");
     Console.WriteLine("  stats                             Show indexer stats");
+    Console.WriteLine("  call-graph <methodId> [type]      Show call graph edges (direct|virtual|delegate|event_subscription)");
+    Console.WriteLine("  engine-callbacks <typeId>         Show detected engine callbacks");
+    Console.WriteLine("  interface-implementations <iface> <method>  Show interface implementations");
 }
 
 static void PrintResult(SearchResult r)

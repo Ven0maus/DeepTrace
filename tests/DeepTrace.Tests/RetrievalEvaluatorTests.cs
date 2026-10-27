@@ -39,6 +39,10 @@ public class RetrievalEvaluatorTests
         public void StoreRuntimeObservation(Core.Runtime.RuntimeObservation observation) => throw new NotImplementedException();
         public IReadOnlyList<Core.Runtime.RuntimeObservation> GetRuntimeObservations(string symbolId) => throw new NotImplementedException();
         public IReadOnlyList<Core.Runtime.RuntimeObservation> GetAllRuntimeObservations() => throw new NotImplementedException();
+        public IReadOnlyList<CallGraphEdge> GetCallGraphEdges(string methodSymbolId) => throw new NotImplementedException();
+        public IReadOnlyList<CallGraphEdge> GetCallGraphEdgesByType(string methodSymbolId, string edgeType) => throw new NotImplementedException();
+        public IReadOnlyList<string> GetInterfaceImplementations(string interfaceName, string methodName) => throw new NotImplementedException();
+        public IReadOnlyList<string> GetEngineCallbacks(string typeSymbolId) => throw new NotImplementedException();
     }
 
     [Fact]

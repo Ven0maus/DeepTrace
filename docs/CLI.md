@@ -196,6 +196,59 @@ deeptrace callees <methodSymbolId>
 
 Output: list of callee symbol IDs.
 
+### `call-graph <methodId> [edgeType]`
+
+Show the enriched call graph for a method — direct calls, virtual dispatch, delegates, and events.
+
+```
+deeptrace call-graph <methodId> [edgeType]
+```
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `methodId` | Method symbol ID | required |
+| `edgeType` | Filter by edge type: `direct`, `virtual`, `delegate`, `event_subscription`, `event_unsubscription` | all |
+
+Edge types:
+- **direct** — `call` opcode to a non-add/remove method
+- **virtual** — `callvirt` opcode to a virtual/non-delegate method
+- **delegate** — `callvirt` on `System.Action/Func/Predicate/Comparison` or `*Delegate.Invoke`
+- **event_subscription** — `call` to an `add_` method
+- **event_unsubscription** — `call` to a `remove_` method
+
+### `engine-callbacks <typeId>`
+
+Show detected Unity/Unreal engine lifecycle callbacks for a type.
+
+```
+deeptrace engine-callbacks <typeId>
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `typeId` | Type symbol ID |
+
+Detects conventions for:
+- **Unity** (MonoBehaviour, ScriptableObject): Awake, Start, Update, FixedUpdate, LateUpdate, OnEnable, OnDisable, OnDestroy, OnTriggerEnter, OnCollisionEnter, etc.
+- **Unreal** (Actor, GameMode): BeginPlay, Tick, Destroyed, etc.
+
+### `interface-implementations <iface> <method>`
+
+Show concrete implementations of an interface method — both explicit and implicit.
+
+```
+deeptrace interface-implementations <interfaceName> <methodName>
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `interfaceName` | Interface full name (e.g., "System.IDisposable") |
+| `methodName` | Method name (e.g., "Dispose") |
+
+Detects:
+- **Explicit**: `InterfaceName.MethodName` pattern in method name
+- **Implicit**: via `Overrides` collection in metadata
+
 ### `references`
 
 Find all references to a symbol (type references, method callers, method callees).

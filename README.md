@@ -194,7 +194,7 @@ var report = workflow.Investigate("How does the game greet players?");
 
 - No semantic embeddings — BM25 scoring is lexical only
 - IL2CPP assemblies not supported (managed .NET only)
-- Static call graph incomplete for virtual dispatch, reflection, events, engine callbacks
+- Static call graph does not cover reflection — use runtime observations for reflection-based calls
 
 ## License
 
