@@ -158,7 +158,7 @@ public class CliCommandBenchmarks
     public void Benchmark_DiscoverAssemblies()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var assemblies = _sharedDb.Indexer.DiscoverAssemblies(_sharedDb.TestDir);
+        var assemblies = _sharedDb.Indexer.DiscoverAssemblies(_sharedDb.WorkDir);
         sw.Stop();
         _output.WriteLine($"discover: {assemblies.Count} assemblies in {sw.ElapsedMilliseconds}ms");
         Assert.True(assemblies.Count >= 1);
@@ -516,14 +516,17 @@ public class CliCommandBenchmarks
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         // 1. discover
-        var assemblies = _sharedDb.Indexer.DiscoverAssemblies(_sharedDb.TestDir);
+        var assemblies = _sharedDb.Indexer.DiscoverAssemblies(_sharedDb.WorkDir);
 
         // 2. index (already done by shared setup, but measure it fresh)
         var sw2 = System.Diagnostics.Stopwatch.StartNew();
-        var freshIndexer = new SqliteIndexer(Path.Combine(Path.GetTempPath(), $"workflow.db"), new IlspyDecompiler());
+        var freshDbPath = Path.Combine(Path.GetDirectoryName(typeof(CliCommandBenchmarks).Assembly.Location)!, "benchdata", $"workflow_{Guid.NewGuid()}.db");
+        var freshIndexer = new SqliteIndexer(freshDbPath, new IlspyDecompiler());
         freshIndexer.IndexAssembly(assemblies[0]);
         var tIndex = sw2.ElapsedMilliseconds;
         freshIndexer.Dispose();
+        // Clean up fresh DB after use
+        try { File.Delete(freshDbPath); } catch { }
 
         // 3. search
         var searchResults = _sharedDb.Indexer.Search("Execute", 100);
@@ -568,26 +571,31 @@ public class CliCommandBenchmarks
 
 /// <summary>
 /// Shared pre-indexed database for all benchmarks in this collection.
+/// Creates the DB in the test project's output directory from freshly built DLLs.
 /// </summary>
 public class SharedBenchDb : IDisposable
 {
-    public readonly string TestDir;
     public readonly string DbPath;
+    public readonly string WorkDir;
     public readonly SqliteIndexer Indexer;
     private bool _disposed;
 
     public SharedBenchDb()
     {
-        TestDir = Path.Combine(Path.GetTempPath(), $"deeptrace_shared_{Guid.NewGuid()}");
-        Directory.CreateDirectory(TestDir);
-        DbPath = Path.Combine(TestDir, "shared.db");
+        // Use test assembly directory so the DB lives alongside the built test binary
+        var testDir = Path.GetDirectoryName(typeof(CliCommandBenchmarks).Assembly.Location)!;
+        WorkDir = Path.Combine(testDir, "benchdata");
+        Directory.CreateDirectory(WorkDir);
 
+        DbPath = Path.Combine(WorkDir, "bench.db");
+
+        // Use the freshly built BenchmarkLib DLL from project references
         var dllSrc = typeof(BenchmarkLib.Data.ProcessRecord0).Assembly.Location;
-        var dllPath = Path.Combine(TestDir, "BenchmarkLib.dll");
+        var dllPath = Path.Combine(WorkDir, "BenchmarkLib.dll");
         File.Copy(dllSrc, dllPath, overwrite: true);
 
         Indexer = new SqliteIndexer(DbPath, new IlspyDecompiler());
-        var assemblies = Indexer.DiscoverAssemblies(TestDir);
+        var assemblies = Indexer.DiscoverAssemblies(WorkDir);
         Indexer.IndexAssembly(assemblies[0]);
     }
 
@@ -596,7 +604,11 @@ public class SharedBenchDb : IDisposable
         if (_disposed) return;
         _disposed = true;
         Indexer.Dispose();
-        try { Directory.Delete(TestDir, true); } catch { }
+        try { Directory.Delete(WorkDir, true); }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to clean up benchdata: {ex.Message}");
+        }
     }
 }
 

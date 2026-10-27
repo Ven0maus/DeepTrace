@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using DeepTrace.Core.Models;
 
@@ -11,6 +11,7 @@ public static class Bm25Scorer
 {
     private const double K1 = 1.5;
     private const double B = 0.75;
+    private static readonly ConcurrentDictionary<string, string[]> _tokenCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Score a search result against a query.
@@ -58,12 +59,15 @@ public static class Bm25Scorer
         if (string.IsNullOrWhiteSpace(text))
             return [];
 
-        var lower = text.ToLowerInvariant();
-        return lower.Split(new[] { ' ', '.', '_', '-', '(', ')', ':', ',' },
-            System.StringSplitOptions.RemoveEmptyEntries)
-            .Where(t => t.Length >= 2)
-            .Distinct()
-            .ToArray();
+        return _tokenCache.GetOrAdd(text, _ =>
+        {
+            var lower = text.ToLowerInvariant();
+            return lower.Split(new[] { ' ', '.', '_', '-', '(', ')', ':', ',' },
+                System.StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => t.Length >= 2)
+                .Distinct()
+                .ToArray();
+        });
     }
 
     private static double ComputeTermScore(string[] documentTerms, string[] queryTerms)
@@ -72,22 +76,22 @@ public static class Bm25Scorer
             return 0;
 
         var score = 0.0;
-        var docFreq = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
 
-        foreach (var term in documentTerms)
+        // Inline term frequency counting to avoid dictionary allocation
+        var len = documentTerms.Length;
+        foreach (var qTerm in queryTerms)
         {
-            if (docFreq.TryGetValue(term, out var count))
-                docFreq[term] = count + 1;
-            else
-                docFreq[term] = 1;
-        }
-
-        foreach (var qTerm in queryTerms.Distinct())
-        {
-            if (docFreq.TryGetValue(qTerm, out var freq))
+            var freq = 0;
+            for (var i = 0; i < len; i++)
             {
-                var idf = Math.Log(1.0 + (1.0 - freq / documentTerms.Length) + 0.5);
-                var tf = (freq * (K1 + 1.0)) / (freq + K1 * (1.0 - B + B * documentTerms.Length));
+                if (documentTerms[i] == qTerm)
+                    freq++;
+            }
+
+            if (freq > 0)
+            {
+                var idf = Math.Log(1.0 + (1.0 - freq / len) + 0.5);
+                var tf = (freq * (K1 + 1.0)) / (freq + K1 * (1.0 - B + B * len));
                 score += idf * tf;
             }
         }

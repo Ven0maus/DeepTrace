@@ -505,24 +505,22 @@ public sealed class InvestigationWorkflow
         {
             var trimmed = line.Trim();
 
-            // Direct caller/callee: "  FullName"
-            if (trimmed.StartsWith("  ") && !trimmed.StartsWith("    ") && !trimmed.StartsWith("Level "))
+            // Direct caller/callee: "  FullName" (2-space indent, not deeper)
+            if (line.StartsWith("  ") && !line.StartsWith("    ") && !trimmed.StartsWith("Level "))
             {
-                var name = trimmed.Trim();
-                // Try to extract symbol ID from the name format "Namespace.Type.MethodName"
+                var name = trimmed;
                 if (!string.IsNullOrEmpty(name) && name.Contains('.'))
                 {
                     ids.Add(name);
                 }
             }
             // Deeper: "    Level N: FullName"
-            else if (trimmed.StartsWith("    Level ", StringComparison.Ordinal))
+            else if (trimmed.StartsWith("Level ", StringComparison.Ordinal))
             {
-                var afterLevel = trimmed.Substring("    Level ".Length);
-                var colonIdx = afterLevel.IndexOf(':');
+                var colonIdx = trimmed.IndexOf(':');
                 if (colonIdx > 0)
                 {
-                    var name = afterLevel.Substring(colonIdx + 1).Trim();
+                    var name = trimmed.Substring(colonIdx + 1).Trim();
                     if (!string.IsNullOrEmpty(name) && name.Contains('.'))
                     {
                         ids.Add(name);

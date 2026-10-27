@@ -327,23 +327,24 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             .P("@limit", limit);
         using var methReader = methCmd.ExecuteReader();
 
+        var seenIds = results.Select(r => r.SymbolId).ToHashSet();
         while (methReader.Read())
         {
             var symbolId = methReader.GetString(0);
-            if (!results.Any(r => r.SymbolId == symbolId))
+            if (!seenIds.Add(symbolId))
+                continue;
+
+            var sr = new SearchResult
             {
-                var sr = new SearchResult
-                {
-                    SymbolId = symbolId,
-                    Name = methReader.GetString(2),
-                    Kind = SymbolKind.Method,
-                    FullyQualifiedName = methReader.GetString(1),
-                    Assembly = methReader.GetString(3),
-                    Excerpt = GetExcerpt(methReader.GetString(4)),
-                };
-                sr.RelevanceScore = Bm25Scorer.Score(sr, query);
-                results.Add(sr);
-            }
+                SymbolId = symbolId,
+                Name = methReader.GetString(2),
+                Kind = SymbolKind.Method,
+                FullyQualifiedName = methReader.GetString(1),
+                Assembly = methReader.GetString(3),
+                Excerpt = GetExcerpt(methReader.GetString(4)),
+            };
+            sr.RelevanceScore = Bm25Scorer.Score(sr, query);
+            results.Add(sr);
         }
 
         results.Sort((a, b) => b.RelevanceScore.CompareTo(a.RelevanceScore));
@@ -358,50 +359,67 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-        var symCmd = conn.Cmd(@"SELECT id, full_name, namespace, name, base_type
-                FROM symbols WHERE assembly = @assembly AND kind = 'Type' AND full_name = @fullName")
-            .P("@assembly", assemblyName)
-            .P("@fullName", typeFullName);
-        using var symReader = symCmd.ExecuteReader();
+            var symCmd = conn.Cmd(@"SELECT id, full_name, namespace, name, base_type
+                    FROM symbols WHERE assembly = @assembly AND kind = 'Type' AND full_name = @fullName")
+                .P("@assembly", assemblyName)
+                .P("@fullName", typeFullName);
+            using var symReader = symCmd.ExecuteReader();
 
-        if (!symReader.Read())
-            return null;
+            if (!symReader.Read())
+                return null;
 
-        var typeId = symReader.GetString(0);
-        var fullName = symReader.GetString(1);
-        var ns = symReader.GetString(2);
-        var name = symReader.GetString(3);
-        var baseType = symReader.IsDBNull(4) ? null : symReader.GetString(4);
+            var typeId = symReader.GetString(0);
+            var fullName = symReader.GetString(1);
+            var ns = symReader.GetString(2);
+            var name = symReader.GetString(3);
+            var baseType = symReader.IsDBNull(4) ? null : symReader.GetString(4);
 
-        var type = new TypeInfo
-        {
-            SymbolId = typeId,
-            FullName = fullName,
-            Namespace = ns,
-            Name = name,
-            BaseTypeFullName = baseType,
-            AssemblyName = assemblyName,
-        };
+            var type = new TypeInfo
+            {
+                SymbolId = typeId,
+                FullName = fullName,
+                Namespace = ns,
+                Name = name,
+                BaseTypeFullName = baseType,
+                AssemblyName = assemblyName,
+            };
 
-        // Interfaces
-        var ifaceCmd = conn.Cmd("SELECT interface_name FROM type_interfaces WHERE type_id = @id")
+            type.Interfaces = LoadTypeInterfaces(conn, typeId);
+            type.Attributes = LoadTypeAttributes(conn, typeId);
+            type.Methods = LoadTypeMethods(conn, assemblyName, fullName);
+            type.Fields = LoadTypeFields(conn, typeId, fullName);
+            type.DerivedTypes = LoadTypeDerivedTypes(conn, typeId);
+            type.BaseTypes = LoadTypeBaseTypes(conn, typeId);
+            type.TypeReferences = LoadTypeReferences(conn, typeId);
+
+            return type;
+        }
+    }
+
+    private static IReadOnlyList<string> LoadTypeInterfaces(SqliteConnection conn, string typeId)
+    {
+        var cmd = conn.Cmd("SELECT interface_name FROM type_interfaces WHERE type_id = @id")
             .P("@id", typeId);
-        using var ifaceReader = ifaceCmd.ExecuteReader();
-        var ifaceList = new List<string>();
-        while (ifaceReader.Read())
-            ifaceList.Add(ifaceReader.GetString(0));
-        type.Interfaces = [.. ifaceList];
+        using var reader = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (reader.Read())
+            list.Add(reader.GetString(0));
+        return [.. list];
+    }
 
-        // Attributes
-        var attrCmd = conn.Cmd("SELECT attribute FROM type_attributes WHERE type_id = @id")
+    private static IReadOnlyList<string> LoadTypeAttributes(SqliteConnection conn, string typeId)
+    {
+        var cmd = conn.Cmd("SELECT attribute FROM type_attributes WHERE type_id = @id")
             .P("@id", typeId);
-        using var attrReader = attrCmd.ExecuteReader();
-        var attrList = new List<string>();
-        while (attrReader.Read())
-            attrList.Add(attrReader.GetString(0));
-        type.Attributes = [.. attrList];
+        using var reader = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (reader.Read())
+            list.Add(reader.GetString(0));
+        return [.. list];
+    }
 
-        // Methods
+    private static IReadOnlyList<MethodInfo> LoadTypeMethods(SqliteConnection conn, string assemblyName, string fullName)
+    {
         var methodCmd = conn.Cmd(@"SELECT m.symbol_id, s.signature, m.is_static, m.is_virtual, m.is_abstract, m.is_override
                 FROM methods m JOIN symbols s ON m.symbol_id = s.id
                 WHERE m.symbol_id LIKE @prefix")
@@ -427,22 +445,40 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 IsOverride = methodReader.GetInt32(5) == 1,
             });
         }
-        type.Methods = [.. methodList];
 
-        // Load method parameters
-        foreach (var method in type.Methods)
+        // Batch-load method parameters
+        var methodIds = methodList.Select(m => m.SymbolId).ToArray();
+        if (methodIds.Length > 0)
         {
-            var paramCmd = conn.Cmd(@"SELECT param_name, param_type FROM method_parameters
-                    WHERE method_id = @id ORDER BY param_index")
-                .P("@id", method.SymbolId);
+            var paramCmd = conn.Cmd(@"SELECT method_id, param_name, param_type FROM method_parameters
+                    WHERE method_id IN (" + string.Join(",", methodIds.Select((_, i) => $"@p{i}")) + @")
+                    ORDER BY param_index");
+            for (var i = 0; i < methodIds.Length; i++)
+                paramCmd.P($"@p{i}", methodIds[i]);
             using var paramReader = paramCmd.ExecuteReader();
-            var paramList = new List<string>();
+            var paramDict = new Dictionary<string, List<string>>();
             while (paramReader.Read())
-                paramList.Add($"{paramReader.GetString(1)} {paramReader.GetString(0)}");
-            method.Parameters = paramList;
+            {
+                var mid = paramReader.GetString(0);
+                if (!paramDict.TryGetValue(mid, out var list))
+                {
+                    list = new List<string>();
+                    paramDict[mid] = list;
+                }
+                list.Add($"{paramReader.GetString(2)} {paramReader.GetString(1)}");
+            }
+            foreach (var method in methodList)
+            {
+                if (paramDict.TryGetValue(method.SymbolId, out var paramList))
+                    method.Parameters = paramList;
+            }
         }
 
-        // Fields
+        return [.. methodList];
+    }
+
+    private static IReadOnlyList<FieldInfo> LoadTypeFields(SqliteConnection conn, string typeId, string fullName)
+    {
         var fieldCmd = conn.Cmd(@"SELECT id, type, is_static, is_literal
                 FROM fields WHERE symbol_id LIKE @prefix")
             .P("@prefix", $"{typeId}::%");
@@ -466,43 +502,46 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 IsLiteral = fieldReader.GetInt32(3) == 1,
             });
         }
-        type.Fields = [.. fieldList];
+        return [.. fieldList];
+    }
 
-        // Derived types
-        var derivedCmd = conn.Cmd(@"SELECT s.full_name FROM type_hierarchy h
+    private static IReadOnlyList<string> LoadTypeDerivedTypes(SqliteConnection conn, string typeId)
+    {
+        var cmd = conn.Cmd(@"SELECT s.full_name FROM type_hierarchy h
                 JOIN symbols s ON h.type_id = s.id
                 WHERE h.base_type_id = @typeId")
             .P("@typeId", typeId);
-        using var derivedReader = derivedCmd.ExecuteReader();
-        var derivedList = new List<string>();
-        while (derivedReader.Read())
-            derivedList.Add(derivedReader.GetString(0));
-        type.DerivedTypes = [.. derivedList];
+        using var reader = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (reader.Read())
+            list.Add(reader.GetString(0));
+        return [.. list];
+    }
 
-        // Base types
-        var baseCmd = conn.Cmd(@"SELECT s.full_name FROM type_hierarchy h
+    private static IReadOnlyList<string> LoadTypeBaseTypes(SqliteConnection conn, string typeId)
+    {
+        var cmd = conn.Cmd(@"SELECT s.full_name FROM type_hierarchy h
                 JOIN symbols s ON h.base_type_id = s.id
                 WHERE h.type_id = @typeId")
             .P("@typeId", typeId);
-        using var baseReader = baseCmd.ExecuteReader();
-        var baseList = new List<string>();
-        while (baseReader.Read())
-            baseList.Add(baseReader.GetString(0));
-        type.BaseTypes = [.. baseList];
+        using var reader = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (reader.Read())
+            list.Add(reader.GetString(0));
+        return [.. list];
+    }
 
-        // Type references
-        var refCmd = conn.Cmd(@"SELECT s.full_name FROM type_references r
+    private static IReadOnlyList<string> LoadTypeReferences(SqliteConnection conn, string typeId)
+    {
+        var cmd = conn.Cmd(@"SELECT s.full_name FROM type_references r
                 JOIN symbols s ON r.target_type_id = s.id
                 WHERE r.source_type_id = @typeId")
             .P("@typeId", typeId);
-        using var refReader = refCmd.ExecuteReader();
-        var refList = new List<string>();
-        while (refReader.Read())
-            refList.Add(refReader.GetString(0));
-        type.TypeReferences = [.. refList];
-
-        return type;
-        }
+        using var reader = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (reader.Read())
+            list.Add(reader.GetString(0));
+        return [.. list];
     }
 
     public IReadOnlyList<string> GetCallers(string methodSymbolId)
@@ -586,17 +625,20 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
             conn.Open();
 
-            // Normalize: if input looks like a full_name (no ::), convert to symbol_id format
+            // Normalize: if input looks like a full_name (no ::), look up assembly from DB
             var normalizedSymbolId = symbolId;
             if (!symbolId.Contains("::"))
             {
-                normalizedSymbolId = $"TestLib::{symbolId}";
+                var asmCmd = conn.Cmd("SELECT name FROM symbols WHERE full_name = @fullName LIMIT 1")
+                    .P("@fullName", symbolId);
+                var asmName = asmCmd.ExecuteScalar() as string;
+                normalizedSymbolId = asmName != null ? $"{asmName}::{symbolId}" : symbolId;
             }
 
             var results = new List<SearchResult>();
 
             // Callers
-            var callersCmd = conn.Cmd(@"SELECT s.full_name, s.name, s.kind, s2.name AS assembly
+            var callersCmd = conn.Cmd(@"SELECT c.caller_id, s.full_name, s.name, s.kind, s2.name AS assembly
                     FROM method_callers c
                     JOIN symbols s ON c.caller_id = s.id
                     JOIN assemblies s2 ON s.assembly = s2.name
@@ -608,16 +650,16 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 results.Add(new SearchResult
                 {
                     SymbolId = callersReader.GetString(0),
-                    Name = callersReader.GetString(1),
+                    Name = callersReader.GetString(2),
                     Kind = SymbolKind.Method,
-                    FullyQualifiedName = callersReader.GetString(0),
-                    Assembly = callersReader.GetString(3),
+                    FullyQualifiedName = callersReader.GetString(1),
+                    Assembly = callersReader.GetString(4),
                     Excerpt = "caller",
                 });
             }
 
             // Callees
-            var calleesCmd = conn.Cmd(@"SELECT s.full_name, s.name, s.kind, s2.name AS assembly
+            var calleesCmd = conn.Cmd(@"SELECT c.called_id, s.full_name, s.name, s.kind, s2.name AS assembly
                     FROM method_callees c
                     JOIN symbols s ON c.called_id = s.id
                     JOIN assemblies s2 ON s.assembly = s2.name
@@ -629,16 +671,16 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 results.Add(new SearchResult
                 {
                     SymbolId = calleesReader.GetString(0),
-                    Name = calleesReader.GetString(1),
+                    Name = calleesReader.GetString(2),
                     Kind = SymbolKind.Method,
-                    FullyQualifiedName = calleesReader.GetString(0),
-                    Assembly = calleesReader.GetString(3),
+                    FullyQualifiedName = calleesReader.GetString(1),
+                    Assembly = calleesReader.GetString(4),
                     Excerpt = "callee",
                 });
             }
 
             // Type references
-            var typeRefsCmd = conn.Cmd(@"SELECT s2.full_name, s2.name, s2.kind, s3.name AS assembly
+            var typeRefsCmd = conn.Cmd(@"SELECT r.target_type_id, s2.full_name, s2.name, s2.kind, s3.name AS assembly
                     FROM type_references r
                     JOIN symbols s2 ON r.target_type_id = s2.id
                     JOIN symbols s1 ON r.source_type_id = s1.id
@@ -652,10 +694,10 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 results.Add(new SearchResult
                 {
                     SymbolId = typeRefsReader.GetString(0),
-                    Name = typeRefsReader.GetString(1),
-                    Kind = Enum.Parse<SymbolKind>(typeRefsReader.GetString(2)),
-                    FullyQualifiedName = typeRefsReader.GetString(0),
-                    Assembly = typeRefsReader.GetString(3),
+                    Name = typeRefsReader.GetString(2),
+                    Kind = Enum.Parse<SymbolKind>(typeRefsReader.GetString(3)),
+                    FullyQualifiedName = typeRefsReader.GetString(1),
+                    Assembly = typeRefsReader.GetString(4),
                     Excerpt = "type reference",
                 });
             }
@@ -689,11 +731,11 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
     private static readonly string[] PragmaSettings = new[]
     {
-        "PRAGMA journal_mode=WAL;",
-        "PRAGMA synchronous=NORMAL;",
-        "PRAGMA temp_store=MEMORY;",
-        "PRAGMA cache_size=100000;",
-        "PRAGMA mmap_size=268435456;",
+        "PRAGMA journal_mode=WAL",
+        "PRAGMA synchronous=NORMAL",
+        "PRAGMA temp_store=MEMORY",
+        "PRAGMA cache_size=100000",
+        "PRAGMA mmap_size=268435456",
     };
 
     private void InitializeDatabase()
@@ -944,25 +986,35 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                fullName.EndsWith("Delegate");
     }
 
+    private static readonly ConcurrentDictionary<string, bool> _addRemoveCache = new();
+
     private static bool IsAddRemoveMethod(MethodReference methodRef)
     {
         if (methodRef.Name.StartsWith("add_", StringComparison.Ordinal) ||
             methodRef.Name.StartsWith("remove_", StringComparison.Ordinal))
             return true;
 
-        // Check overrides for explicit add/remove
+        var cacheKey = $"{methodRef.DeclaringType?.FullName}::{methodRef.Name}";
+        if (_addRemoveCache.TryGetValue(cacheKey, out var cached))
+            return cached;
+
         var resolved = methodRef.Resolve();
+        var result = false;
         if (resolved != null)
         {
             foreach (var @override in resolved.Overrides)
             {
                 if (@override.Name.StartsWith("add_", StringComparison.Ordinal) ||
                     @override.Name.StartsWith("remove_", StringComparison.Ordinal))
-                    return true;
+                {
+                    result = true;
+                    break;
+                }
             }
         }
 
-        return false;
+        _addRemoveCache[cacheKey] = result;
+        return result;
     }
 
     private static readonly HashSet<string> EngineCallbackPatterns = new(StringComparer.OrdinalIgnoreCase)
@@ -1196,10 +1248,44 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         if (string.IsNullOrEmpty(body))
             return string.Empty;
-        var lines = body.Split('\n');
-        var start = Math.Max(0, lines.Length / 2 - 3);
-        var end = Math.Min(lines.Length, start + 7);
-        return string.Join("\n", lines[start..end]).Trim();
+
+        var totalLines = 1;
+        var i = 0;
+        while (i < body.Length)
+        {
+            if (body[i] == '\n') totalLines++;
+            i++;
+        }
+
+        var start = Math.Max(0, totalLines / 2 - 3);
+        var end = Math.Min(totalLines, start + 7);
+
+        // Count characters to the start line
+        var charPos = 0;
+        var lineNum = 0;
+        while (charPos < body.Length && lineNum < start)
+        {
+            if (body[charPos] == '\n') lineNum++;
+            charPos++;
+        }
+
+        var endPos = charPos;
+        var count = 0;
+        while (endPos < body.Length && lineNum < end)
+        {
+            if (body[endPos] == '\n')
+            {
+                lineNum++;
+                if (lineNum < end) endPos++;
+            }
+            else
+            {
+                endPos++;
+            }
+            count++;
+        }
+
+        return body.Substring(charPos, Math.Max(0, endPos - charPos)).Trim();
     }
 
     public void StoreRuntimeObservation(RuntimeObservation observation)

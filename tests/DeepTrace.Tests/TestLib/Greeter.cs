@@ -14,5 +14,9 @@ public class Greeter
         return $"{_prefix}, {name}!";
     }
 
- 
+    public static void Main()
+    {
+        var greeter = new Greeter();
+        Console.WriteLine(greeter.Greet("World"));
+    }
 }

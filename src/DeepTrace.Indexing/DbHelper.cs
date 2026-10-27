@@ -16,7 +16,12 @@ internal static class DbHelper
 
     public static SqliteCommand P(this SqliteCommand cmd, string name, object? value)
     {
-        cmd.Parameters.AddWithValue(name, value ?? (object?)DBNull.Value);
+        var param = cmd.Parameters.Add(name, value is string ? SqliteType.Text :
+            value is int or long ? SqliteType.Integer :
+            value is double ? SqliteType.Real :
+            value is bool ? SqliteType.Integer :
+            SqliteType.Blob);
+        param.Value = value ?? (object?)DBNull.Value;
         return cmd;
     }
 
