@@ -23,7 +23,6 @@ public class RetrievalEvaluatorTests
         }
 
         public void IndexAssembly(Core.Models.AssemblyInfo assembly) => throw new NotImplementedException();
-        public void IndexAssemblyAsync(Core.Models.AssemblyInfo assembly, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public IReadOnlyList<Core.Models.TypeInfo> GetTypes(string assemblyName) => throw new NotImplementedException();
         public Core.Models.TypeInfo? GetTypeInfo(string assemblyName, string typeFullName) => throw new NotImplementedException();
         public Core.Models.MethodInfo? GetMethod(string symbolId) => throw new NotImplementedException();

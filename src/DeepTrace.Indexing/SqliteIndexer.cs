@@ -19,7 +19,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     private readonly IDecompiler _decompiler;
     private readonly AssemblyDiscoverer _discoverer;
     private readonly object _lock = new();
-    private IAssemblyResolver _sharedResolver;
+    private IAssemblyResolver? _sharedResolver;
     private string[] _unityManagedDirs = Array.Empty<string>();
 
     public SqliteIndexer(string databasePath, IDecompiler decompiler)
@@ -78,9 +78,6 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             tx.Commit();
         }
     }
-
-    public void IndexAssemblyAsync(AssemblyInfo assembly, CancellationToken cancellationToken = default)
-        => IndexAssembly(assembly);
 
     /// <summary>
     /// Index multiple assemblies in a single shared transaction for better throughput.
@@ -1551,7 +1548,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
         public AssemblyDefinition Resolve(AssemblyNameReference name) => _resolver.Resolve(name, new ReaderParameters());
 
-        public AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)
+        public AssemblyDefinition? Resolve(AssemblyNameReference name, ReaderParameters parameters)
         {
             try
             {
@@ -1649,17 +1646,6 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"LSA embedding build failed: {ex.Message}");
-        }
-    }
-
-    private bool HasLsaData()
-    {
-        lock (_lock)
-        {
-            using var conn = new SqliteConnection($"Data Source={_databasePath};Pooling=false");
-            conn.Open();
-            var cmd = conn.Cmd("SELECT COUNT(*) FROM method_embeddings");
-            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
         }
     }
 

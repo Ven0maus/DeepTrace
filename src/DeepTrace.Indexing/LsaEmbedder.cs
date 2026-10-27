@@ -86,7 +86,9 @@ public static class LsaEmbedder
             {
                 var oldest = _tokenCacheOrder.First;
                 _tokenCacheOrder.RemoveFirst();
-                _tokenCacheNodes.TryRemove(oldest.Value, out _);
+#pragma warning disable CS8602
+                _tokenCacheNodes!.TryRemove(oldest.Value!, out _);
+#pragma warning restore CS8602
             }
             var node = _tokenCacheOrder.AddLast(text);
             _tokenCacheNodes[text] = node;

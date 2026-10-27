@@ -15,11 +15,6 @@ public interface IIndexer
     void IndexAssembly(AssemblyInfo assembly);
 
     /// <summary>
-    /// Async version of IndexAssembly with cancellation support.
-    /// </summary>
-    void IndexAssemblyAsync(AssemblyInfo assembly, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// List all types in an assembly.
     /// </summary>
     /// <param name="assemblyName">Assembly name (e.g., "TestLib").</param>
