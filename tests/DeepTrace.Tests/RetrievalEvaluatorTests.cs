@@ -43,6 +43,7 @@ public class RetrievalEvaluatorTests
         public IReadOnlyList<CallGraphEdge> GetCallGraphEdgesByType(string methodSymbolId, string edgeType) => throw new NotImplementedException();
         public IReadOnlyList<string> GetInterfaceImplementations(string interfaceName, string methodName) => throw new NotImplementedException();
         public IReadOnlyList<string> GetEngineCallbacks(string typeSymbolId) => throw new NotImplementedException();
+        public void SetUnityManagedDirectories(params string[] managedDirectories) { }
     }
 
     [Fact]

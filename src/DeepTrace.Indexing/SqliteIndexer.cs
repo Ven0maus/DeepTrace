@@ -19,6 +19,8 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     private readonly IDecompiler _decompiler;
     private readonly AssemblyDiscoverer _discoverer;
     private readonly object _lock = new();
+    private IAssemblyResolver _sharedResolver;
+    private string[] _unityManagedDirs = Array.Empty<string>();
 
     public SqliteIndexer(string databasePath, IDecompiler decompiler)
     {
@@ -36,6 +38,14 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
     public IReadOnlyList<AssemblyInfo> DiscoverAssemblies(string directory)
         => _discoverer.Discover(directory);
+
+    public void SetUnityManagedDirectories(params string[] managedDirectories)
+    {
+        lock (_lock)
+        {
+            _unityManagedDirs = managedDirectories;
+        }
+    }
 
     public void IndexAssembly(AssemblyInfo assembly)
     {
@@ -736,6 +746,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         "PRAGMA temp_store=MEMORY",
         "PRAGMA cache_size=100000",
         "PRAGMA mmap_size=268435456",
+        "PRAGMA foreign_keys=OFF",
     };
 
     private void InitializeDatabase()
@@ -758,10 +769,22 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
     {
         var assemblyPath = assembly.Location;
         var assemblyName = assembly.Name;
+        var assemblyDir = Path.GetDirectoryName(assemblyPath) ?? ".";
 
         try
         {
-            using var assemblyDef = AssemblyDefinition.ReadAssembly(assemblyPath, new ReaderParameters());
+            IAssemblyResolver resolver;
+            lock (_lock)
+            {
+                if (_sharedResolver == null)
+                {
+                    var searchDirs = new[] { assemblyDir }.Concat(_unityManagedDirs).ToArray();
+                    _sharedResolver = new FallbackAssemblyResolver(searchDirs);
+                }
+                resolver = _sharedResolver;
+            }
+            var readerParams = new ReaderParameters { AssemblyResolver = resolver, ReadWrite = false };
+            using var assemblyDef = AssemblyDefinition.ReadAssembly(assemblyPath, readerParams);
             IndexTypes(conn, assemblyDef, assemblyName, tx);
             var methodBodies = IndexTypeMethods(conn, assemblyDef, assemblyName, tx);
             IndexTypeHierarchy(conn, assemblyDef, assemblyName, tx);
@@ -769,6 +792,7 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
         }
         catch (Exception ex)
         {
+            System.Console.Error.WriteLine($"[INDEX ERROR] Failed to index {assemblyName}: {ex.GetType().Name}: {ex.Message}");
             System.Diagnostics.Debug.WriteLine($"Failed to index {assemblyName}: {ex.Message}");
         }
     }
@@ -836,6 +860,8 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
 
         foreach (var type in assemblyDef.MainModule.Types)
         {
+ 
+
             foreach (var method in type.Methods)
             {
                 if (method.Name.StartsWith("set_", StringComparison.Ordinal) ||
@@ -852,7 +878,12 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
                 string? body = null;
                 if (!method.IsAbstract && method.HasBody && method.Body.Instructions != null)
                 {
-                    body = _decompiler.TryDecompileMethod(assemblyDef.MainModule.FileName, type.FullName, signature);
+                    var filePath = assemblyDef.MainModule.FileName;
+                    body = _decompiler.TryDecompileMethod(filePath, type.FullName, signature);
+                }
+
+                if (body != null)
+                {
                     var isOverride = method.IsVirtual && method.Name != ".ctor" && method.Name != ".cctor" && method.HasBody;
                     summary = MethodSummaryGenerator.Generate(new MethodInfo { FullName = fullName, Name = method.Name, Signature = signature, IsStatic = method.IsStatic, IsVirtual = method.IsVirtual, IsAbstract = method.IsAbstract, IsOverride = isOverride, Attributes = new List<string>() }, body);
                 }
@@ -1426,6 +1457,43 @@ public sealed class SqliteIndexer : IIndexer, IDisposable
             }
             return observations.AsReadOnly();
         }
+    }
+
+    /// <summary>
+    /// Simple assembly resolver that tries to load assemblies from a search directory.
+    /// Returns null for unresolved assemblies instead of throwing.
+    /// </summary>
+    private sealed class FallbackAssemblyResolver : IAssemblyResolver
+    {
+        private readonly DefaultAssemblyResolver _resolver;
+
+        public FallbackAssemblyResolver(string[] searchDirs)
+        {
+            _resolver = new DefaultAssemblyResolver();
+            foreach (var dir in searchDirs)
+            {
+                _resolver.AddSearchDirectory(dir);
+            }
+        }
+
+        public AssemblyDefinition Resolve(AssemblyNameReference name) => _resolver.Resolve(name, new ReaderParameters());
+
+        public AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)
+        {
+            try
+            {
+                return _resolver.Resolve(name, parameters);
+            }
+            catch (AssemblyResolutionException)
+            {
+                return null;
+            }
+        }
+
+        public void Dispose() => _resolver.Dispose();
+        public void AddAssemblyResolver(IAssemblyResolver resolver) { }
+        public void AddSearchDirectory(string directory) { _resolver.AddSearchDirectory(directory); }
+        public void RemoveSearchDirectory(string directory) { _resolver.RemoveSearchDirectory(directory); }
     }
 
     public IReadOnlyList<CallGraphEdge> GetCallGraphEdges(string methodSymbolId)

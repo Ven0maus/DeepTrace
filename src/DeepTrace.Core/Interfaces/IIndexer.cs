@@ -140,4 +140,11 @@ public interface IIndexer
     /// </summary>
     /// <param name="typeSymbolId">Symbol ID of the type (e.g., "Assembly::Namespace.Type").</param>
     IReadOnlyList<string> GetEngineCallbacks(string typeSymbolId);
+
+    /// <summary>
+    /// Set additional search directories for Unity managed assemblies.
+    /// Used to resolve UnityEngine dependencies during assembly loading.
+    /// </summary>
+    /// <param name="managedDirectories">Paths to Unity managed assembly directories.</param>
+    void SetUnityManagedDirectories(params string[] managedDirectories);
 }

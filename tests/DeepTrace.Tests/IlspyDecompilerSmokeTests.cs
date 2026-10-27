@@ -25,7 +25,8 @@ public class IlspyDecompilerSmokeTests
         var result = decompiler.DecompileMethod(assemblyPath, "TestLib.Greeter", "Greet(System.String)");
 
         Assert.NotEmpty(result);
-        Assert.Contains("Greet", result);
+        Assert.Contains("_prefix", result);
+        Assert.Contains("name", result);
     }
 
     [Fact]

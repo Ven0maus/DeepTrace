@@ -54,7 +54,20 @@ switch (command)
                 Console.Error.WriteLine("Usage: deeptrace [--db <path>] index <directory>");
                 return;
             }
-            var assemblies = indexer.DiscoverAssemblies(args[1]);
+            var gameRoot = args[1];
+            var assemblies = indexer.DiscoverAssemblies(gameRoot);
+
+            // Find Unity managed directories for assembly resolution
+            var managedDirs = new List<string>();
+            foreach (var asm in assemblies)
+            {
+                var dir = Path.GetDirectoryName(asm.Location);
+                if (!string.IsNullOrEmpty(dir) && !managedDirs.Contains(dir))
+                    managedDirs.Add(dir);
+            }
+            if (managedDirs.Count > 0)
+                indexer.SetUnityManagedDirectories(managedDirs.ToArray());
+
             var indexed = 0;
             foreach (var assembly in assemblies)
             {
