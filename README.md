@@ -151,21 +151,11 @@ Copy the skill file into your project and reference it in AGENTS.md:
   <id>deeptrace-cli</id>
   <name>DeepTrace CLI</name>
   <description>Use when working with the DeepTrace CLI to index, search, and investigate .NET assemblies for game mod development.</description>
-  <path>skills/deeptrace-cli.md</path>
+  <path>skills/SKILL.md</path>
 </skill>
 ```
 
-Or add the skill path to your OpenCode configuration to enable auto-discovery:
-
-```json
-{
-  "skills": {
-    "paths": ["skills/"]
-  }
-}
-```
-
-The skill provides a quick-reference guide for all DeepTrace CLI commands, symbol ID formats, and typical workflows. See [skills/deeptrace-cli.md](skills/deeptrace-cli.md) for the full skill content.
+The skill provides a quick-reference guide for all DeepTrace CLI commands, symbol ID formats, and typical workflows. See [skills/SKILL.md](skills/SKILL.md) for the full skill content.
 
 ### Using DeepTrace as a library
 
